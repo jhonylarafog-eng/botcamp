@@ -5,6 +5,7 @@
 const { COMPETICOES, MODOS } = require('./clubs');
 const { norm, acharClube } = require('./text');
 const rank = require('./rankings');
+const { Contagem } = require('./contagem');
 
 const AJUDA = `⚽ *Bot de Campeonato*
 
@@ -29,7 +30,15 @@ Depois é só *digitar o nome do clube* pra entrar nele
 
 *Rankings*
 /ranking /trofeus /artilharia /assistencias
-/derrotas /duplas /trios /perfil`;
+/derrotas /duplas /trios /perfil
+
+*Contagem de gols e assistências*
+Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
+(admin) responda ao print com /ok pra confirmar
+(admin) ou corrija: /reg @fulano 2 gols 1 assistência
+(admin) /desfazer N — cancela um registro
+/lista — jogos, gols e assistências de todos
+/artilheiros /assistentes /pendentes`;
 
 const norma = (s) => norm(s).replace(/ /g, '');
 const tag = (id) => `@${id.split('@')[0]}`;
@@ -39,6 +48,7 @@ class Bot {
     this.store = store;
     this.prefix = prefix;
     this.rng = rng;
+    this.contagem = new Contagem(store, { prefix });
   }
 
   // ---------- entrada ----------
@@ -58,6 +68,8 @@ class Bot {
 
   _handle(ctx) {
     const { msg } = ctx;
+    if (msg.senderName) this.store.jogador(msg.senderId, msg.senderName); // guarda o nome de quem fala
+    if (this.contagem.antes(ctx)) return; // pedido de gols/assistências com print
     const text = String(msg.text || '').trim();
     if (!text) return;
     const camp = this.campAtivo(msg.chatId);
@@ -102,6 +114,14 @@ class Bot {
       case 'duplas': return say(rank.combos(this.store, msg.chatId, 2));
       case 'trios': return say(rank.combos(this.store, msg.chatId, 3));
       case 'perfil': return say(rank.perfil(this.store, msg.chatId, msg.senderId));
+      // contagem de gols e assistências (com print)
+      case 'reg': case 'registrar': return this.contagem.reg(ctx, args);
+      case 'ok': return this.contagem.ok(ctx);
+      case 'desfazer': return this.contagem.desfazer(ctx, args);
+      case 'lista': return this.contagem.lista(ctx);
+      case 'artilheiros': return this.contagem.top(ctx, 'gols');
+      case 'assistentes': return this.contagem.top(ctx, 'assist');
+      case 'pendentes': return this.contagem.pendentes(ctx);
       default: return; // comando desconhecido: ignora (pode ser de outro bot)
     }
   }

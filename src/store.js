@@ -9,7 +9,9 @@ const VAZIO = () => ({
   partidas: {},       // id -> partida (ver game.js)
   campeonatos: {},    // id -> campeonato
   ativos: {},         // chatId -> id do campeonato em andamento
-  contadores: { partida: 0, campeonato: 0 },
+  registros: {},      // id -> contagem de gols/assistências confirmada por admin (contagem.js)
+  pendentes: {},      // printId -> pedido de jogador aguardando confirmação
+  contadores: { partida: 0, campeonato: 0, registro: 0 },
 });
 
 class Store {
@@ -27,8 +29,21 @@ class Store {
     }
   }
 
+  // Agenda a gravação (no máx. 1 por segundo, pra não regravar o arquivo a cada mensagem do grupo)
   salvar() {
     if (!this.arquivo) return;
+    this.sujo = true;
+    if (this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      this.salvarAgora();
+    }, 1000);
+    if (this.timer.unref) this.timer.unref();
+  }
+
+  salvarAgora() {
+    if (!this.arquivo || !this.sujo) return;
+    this.sujo = false;
     fs.mkdirSync(path.dirname(this.arquivo), { recursive: true });
     const tmp = this.arquivo + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));

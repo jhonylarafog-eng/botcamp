@@ -72,6 +72,51 @@ function lembrarEnviado(res) {
   if (enviados.size > 500) enviados.delete(enviados.values().next().value);
 }
 
+// Abre os "embrulhos" do WhatsApp (mensagens temporárias, visualização única)
+function desembrulhar(msg) {
+  let atual = msg;
+  for (let i = 0; i < 4 && atual; i++) {
+    const dentro =
+      atual.ephemeralMessage?.message ||
+      atual.viewOnceMessage?.message ||
+      atual.viewOnceMessageV2?.message ||
+      atual.documentWithCaptionMessage?.message;
+    if (!dentro) break;
+    atual = dentro;
+  }
+  return atual || {};
+}
+
+const ehImagem = (msg) =>
+  !!msg.imageMessage || (msg.documentMessage?.mimetype || '').startsWith('image/');
+
+// Extrai do WhatsApp: texto, se tem imagem (print), menções (@fulano) e a mensagem citada.
+function extrair(mensagem) {
+  const msg = desembrulhar(mensagem);
+  const text =
+    msg.conversation ||
+    msg.extendedTextMessage?.text ||
+    msg.imageMessage?.caption ||
+    msg.videoMessage?.caption ||
+    msg.documentMessage?.caption ||
+    '';
+  const ctxInfo =
+    msg.extendedTextMessage?.contextInfo ||
+    msg.imageMessage?.contextInfo ||
+    msg.documentMessage?.contextInfo ||
+    null;
+  const mentions = ctxInfo?.mentionedJid || [];
+  let quoted = null;
+  if (ctxInfo?.stanzaId) {
+    quoted = {
+      id: ctxInfo.stanzaId,
+      senderId: ctxInfo.participant || null,
+      temImagem: ctxInfo.quotedMessage ? ehImagem(desembrulhar(ctxInfo.quotedMessage)) : false,
+    };
+  }
+  return { text, temImagem: ehImagem(msg), mentions, quoted };
+}
+
 async function processar(sock, m) {
   if (!m.message) return;
   if (m.key.fromMe && enviados.has(m.key.id)) return;
@@ -81,19 +126,16 @@ async function processar(sock, m) {
   const senderId = m.key.participant || m.participant || (m.key.fromMe ? meuId : null);
   if (!senderId) return;
 
-  const msg = m.message;
-  const text =
-    msg.conversation ||
-    msg.extendedTextMessage?.text ||
-    msg.imageMessage?.caption ||
-    msg.videoMessage?.caption ||
-    '';
-  if (!text) return;
+  const { text, temImagem, mentions, quoted } = extrair(m.message);
+  if (!text && !temImagem) return;
 
   const comando = text.trim().startsWith(PREFIX);
   // o dono da conta (quando ele mesmo digita) sempre é admin do bot
   const isAdmin = m.key.fromMe ? true : comando ? await ehAdmin(sock, chatId, senderId) : false;
-  const respostas = bot.handle({ chatId, senderId, senderName: m.pushName, text, isAdmin });
+  const respostas = bot.handle({
+    chatId, senderId, senderName: m.pushName, text, isAdmin,
+    id: m.key.id, temImagem, mentions, quoted,
+  });
   for (const r of respostas) {
     const res = await sock.sendMessage(r.chatId, { text: r.text, mentions: r.mentions });
     lembrarEnviado(res);
@@ -232,5 +274,5 @@ conectar().catch((e) => {
   agendarReconexao();
 });
 
-process.on('SIGTERM', () => { store.salvar(); process.exit(0); });
+process.on('SIGTERM', () => { store.salvarAgora(); process.exit(0); });
 process.on('unhandledRejection', (e) => console.error('unhandledRejection:', e));

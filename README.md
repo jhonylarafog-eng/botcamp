@@ -16,6 +16,16 @@ Rankings: `/ranking` (ELO), `/trofeus`, `/artilharia`, `/assistencias`, `/derrot
 
 Admins do grupo (ou quem iniciou o campeonato) podem usar `/comecar`, `/cancelar` e `/forcar`.
 
+## Contagem de gols e assistências (com print)
+
+1. O jogador manda o **print** do fim da partida e escreve, por exemplo, `fiz 2 gols, dei 1 assistência` (na legenda do print, ou antes/depois dele, em até 15 minutos). Sem print, o bot não anota nada.
+2. O bot registra um pedido pendente. Um **admin** responde ao print com `/ok` para confirmar.
+3. Para corrigir os números: `/reg @fulano 2 gols 1 assistência`, também **respondendo ao print**. O `/reg` não funciona sem citar um print.
+4. Cada registro conta 1 partida jogada. Um mesmo print não pode ser contado duas vezes.
+5. `/desfazer N` cancela o registro número N (o print pode ser registrado de novo).
+
+Consultas: `/lista` (jogos, gols e assistências de todos), `/artilheiros`, `/assistentes`, `/pendentes`.
+
 ## Variáveis de ambiente
 
 | Variável | Para quê |
