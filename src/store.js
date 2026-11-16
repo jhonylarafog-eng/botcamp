@@ -11,7 +11,8 @@ const VAZIO = () => ({
   ativos: {},         // chatId -> id do campeonato em andamento
   registros: {},      // id -> contagem de gols/assistências confirmada por admin (contagem.js)
   pendentes: {},      // printId -> pedido de jogador aguardando confirmação
-  contadores: { partida: 0, campeonato: 0, registro: 0 },
+  votacoes: {},       // id -> votação da Bola de Ouro (votacao.js)
+  contadores: { partida: 0, campeonato: 0, registro: 0, votacao: 0 },
 });
 
 class Store {

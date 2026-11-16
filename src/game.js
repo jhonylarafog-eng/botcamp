@@ -6,6 +6,7 @@ const { COMPETICOES, MODOS } = require('./clubs');
 const { norm, acharClube } = require('./text');
 const rank = require('./rankings');
 const { Contagem } = require('./contagem');
+const { Votacao } = require('./votacao');
 
 const AJUDA = `⚽ *Bot de Campeonato*
 
@@ -38,7 +39,15 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 (admin) ou corrija: /reg @fulano 2 gols 1 assistência
 (admin) /desfazer N — cancela um registro
 /lista — jogos, gols e assistências de todos
-/artilheiros /assistentes /pendentes`;
+/artilheiros /assistentes /pendentes
+
+*Bola de Ouro (votação)*
+(admin) /bolaouro Temporada 1 — abre a votação
+/votar @1º @2º @3º — vota nos 3 melhores (5, 3 e 1 pontos)
+/votos — quem votou, quem falta e a parcial
+(admin) /encerrar — apura e anuncia o campeão
+(admin) /cancelarvotacao — descarta
+/hall — campeões anteriores`;
 
 const norma = (s) => norm(s).replace(/ /g, '');
 const tag = (id) => `@${id.split('@')[0]}`;
@@ -49,6 +58,7 @@ class Bot {
     this.prefix = prefix;
     this.rng = rng;
     this.contagem = new Contagem(store, { prefix });
+    this.votacao = new Votacao(store, this.contagem);
   }
 
   // ---------- entrada ----------
@@ -122,6 +132,13 @@ class Bot {
       case 'artilheiros': return this.contagem.top(ctx, 'gols');
       case 'assistentes': return this.contagem.top(ctx, 'assist');
       case 'pendentes': return this.contagem.pendentes(ctx);
+      // Bola de Ouro (votação)
+      case 'bolaouro': case 'bolaodeouro': case 'votacao': return this.votacao.abrir(ctx, args);
+      case 'votar': case 'voto': return this.votacao.votar(ctx, args);
+      case 'votos': return this.votacao.votos(ctx);
+      case 'encerrar': return this.votacao.encerrar(ctx);
+      case 'cancelarvotacao': return this.votacao.cancelar(ctx);
+      case 'hall': return this.votacao.hall(ctx);
       default: return; // comando desconhecido: ignora (pode ser de outro bot)
     }
   }
