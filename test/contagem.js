@@ -116,4 +116,40 @@ bot = new Bot(store);
 assert.strictEqual(bot.contagem.totais(CHAT).get(ID.caio).gols, 3);
 assert.strictEqual(Object.values(store.data.registros).length, 5);
 
+// ---------- 14) adição manual (/add), sem print ----------
+const { lerManual } = require('../src/contagem');
+assert.deepStrictEqual(lerManual('@5511911111111 3 gols 2 assistências'), { gols: 3, assist: 2, jogos: 0 });
+assert.deepStrictEqual(lerManual('1 gol 2 assistências 4 jogos'), { gols: 1, assist: 2, jogos: 4 });
+assert.deepStrictEqual(lerManual('5 jogos'), { gols: 0, assist: 0, jogos: 5 });
+assert.strictEqual(lerManual('oi'), null);
+assert.strictEqual(lerManual('999 gols').invalido, true);
+
+assert.match(fala('ana', '/add @caio 2 gols', { mentions: [ID.caio] }).saida, /Só admin/);
+// um jogador, uma menção (ids de teste não são numéricos)
+const a1 = fala('admin', '/add @caio 2 gols 1 assistência', { mentions: [ID.caio] });
+assert.match(a1.saida, /Adicionado manualmente/);
+assert.match(a1.saida, /\+2 gols/);
+let t = bot.contagem.totais(CHAT).get(ID.caio);
+assert.deepStrictEqual([t.jogos, t.gols, t.assist], [1, 5, 1]); // não conta partida extra
+// vários jogadores, uma linha cada, com jogos
+const X = '5511911111111@s.whatsapp.net';
+const Y = '5511922222222@s.whatsapp.net';
+const a2 = fala('admin', '/add @5511911111111 3 gols\n@5511922222222 1 gol 2 assistências 4 jogos', { mentions: [X, Y] });
+assert.match(a2.saida, /\+3 gols/);
+assert.match(a2.saida, /\+4 jogos/);
+assert.deepStrictEqual(ultimas[0].mentions, [X, Y]);
+t = bot.contagem.totais(CHAT).get(Y);
+assert.deepStrictEqual([t.jogos, t.gols, t.assist], [4, 1, 2]);
+const a3 = fala('admin', '/add @5511911111111 1 gol @5511922222222 2 gols', { mentions: [X, Y] });
+assert.match(a3.saida, /#9[\s\S]*#10/);
+// erros
+assert.match(fala('admin', '/add 3 gols').saida, /Marque o jogador/);
+assert.match(fala('admin', '/add @caio oi', { mentions: [ID.caio] }).saida, /Não entendi/);
+// desfazer uma adição manual
+const idManual = Object.values(store.data.registros).find((r) => r.manual && r.jogador === ID.caio).id;
+assert.match(fala('admin', `/desfazer ${idManual}`).saida, /Adição manual removida/);
+t = bot.contagem.totais(CHAT).get(ID.caio);
+assert.deepStrictEqual([t.jogos, t.gols, t.assist], [1, 3, 0]);
+fala('ana', '/lista');
+
 console.log('\n✅ CONTAGEM: TODOS OS TESTES PASSARAM');

@@ -37,6 +37,7 @@ Depois é só *digitar o nome do clube* pra entrar nele
 Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 (admin) responda ao print com /ok pra confirmar
 (admin) ou corrija: /reg @fulano 2 gols 1 assistência
+(admin) /add @fulano 3 gols 2 assistências — soma direto, sem print (opcional: 4 jogos)
 (admin) /desfazer N — cancela um registro
 /lista — jogos, gols e assistências de todos
 /artilheiros /assistentes /pendentes
@@ -85,8 +86,10 @@ class Bot {
     const camp = this.campAtivo(msg.chatId);
 
     if (text.startsWith(this.prefix) && text.length > 1) {
-      const [raw, ...resto] = text.slice(this.prefix.length).trim().split(/\s+/);
-      return this.comando(ctx, norma(raw), resto.join(' ').trim(), camp);
+      // separa o comando dos argumentos preservando as quebras de linha dos argumentos
+      const m = text.slice(this.prefix.length).trim().match(/^(\S+)\s*([\s\S]*)$/);
+      if (!m) return;
+      return this.comando(ctx, norma(m[1]), m[2].trim(), camp);
     }
     if (!camp) return;
     if (camp.status === 'inscricoes') return this.entrar(ctx, camp, text, false);
@@ -127,6 +130,7 @@ class Bot {
       // contagem de gols e assistências (com print)
       case 'reg': case 'registrar': return this.contagem.reg(ctx, args);
       case 'ok': return this.contagem.ok(ctx);
+      case 'add': case 'adicionar': return this.contagem.adicionar(ctx, args);
       case 'desfazer': return this.contagem.desfazer(ctx, args);
       case 'lista': return this.contagem.lista(ctx);
       case 'artilheiros': return this.contagem.top(ctx, 'gols');

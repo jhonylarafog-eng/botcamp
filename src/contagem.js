@@ -20,13 +20,13 @@ const txtGols = (n) => (n === 1 ? '1 gol' : `${n} gols`);
 const txtAssist = (n) => (n === 1 ? '1 assistência' : `${n} assistências`);
 
 // Lê "2 gols", "1 assistência", "gols 2", "fiz dois gols"... Retorna null se não achar nada.
-function lerStats(texto) {
+function rotulos(texto) {
   const t = norm(String(texto || '').replace(/@\S+/g, ' ')); // tira as menções (@número)
   const toks = t.split(' ').filter(Boolean);
   const usado = new Set();
   const numeroEm = (i) => {
     if (i < 0 || i >= toks.length || usado.has(i)) return null;
-    const n = /^(\d{1,2}|zero|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)$/.test(toks[i])
+    const n = /^(\d{1,3}|zero|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)$/.test(toks[i])
       ? paraNumero(toks[i]) : null;
     return n === null || n === undefined ? null : n;
   };
@@ -45,12 +45,31 @@ function lerStats(texto) {
   };
   const gols = acharPara((x) => /^gol(s|os)?$/.test(x));
   const assist = acharPara((x) => /^assist\w*$/.test(x));
+  const jogos = acharPara((x) => /^(jogos?|partidas?)$/.test(x));
+  return { gols, assist, jogos };
+}
+
+// Pedido de jogador / /reg: só gols e assistências (0 a 30).
+function lerStats(texto) {
+  const { gols, assist } = rotulos(texto);
   if (gols === null && assist === null) return null;
   const g = gols ?? 0;
   const a = assist ?? 0;
   if (g > MAXIMO || a > MAXIMO) return { invalido: true };
   return { gols: g, assist: a };
 }
+
+// Adição manual do admin (/add): gols, assistências e, se quiser, jogos (0 a 200).
+const MAXIMO_MANUAL = 200;
+function lerManual(texto) {
+  const { gols, assist, jogos } = rotulos(texto);
+  if (gols === null && assist === null && jogos === null) return null;
+  const r = { gols: gols ?? 0, assist: assist ?? 0, jogos: jogos ?? 0 };
+  if (r.gols > MAXIMO_MANUAL || r.assist > MAXIMO_MANUAL || r.jogos > MAXIMO_MANUAL) return { invalido: true };
+  return r;
+}
+
+const usuario = (id) => id.split('@')[0].split(':')[0];
 
 class Contagem {
   constructor(store, { prefix = '/', agora = () => Date.now() } = {}) {
@@ -80,7 +99,7 @@ class Contagem {
     const mapa = new Map();
     for (const r of this.ativos(chatId)) {
       const t = mapa.get(r.jogador) || { id: r.jogador, jogos: 0, gols: 0, assist: 0 };
-      t.jogos++;
+      t.jogos += r.jogos ?? 1; // registros antigos/por print contam 1 partida; /add conta só o que o admin informar
       t.gols += r.gols;
       t.assist += r.assist;
       mapa.set(r.jogador, t);
@@ -213,6 +232,48 @@ class Contagem {
     say(txt, [jogador]);
   }
 
+  // /add @fulano 3 gols 2 assistências [4 jogos]  — soma direto, sem print. Vários jogadores: um por linha ou separados por ;
+  adicionar(ctx, args) {
+    const { msg, say } = ctx;
+    if (!this.exigeAdmin(ctx)) return;
+    const uso = 'Use assim:\n/add @fulano 3 gols 2 assistências\n(opcional: 4 jogos, pra contar partidas)\nVárias pessoas: uma por linha ou separadas por ;';
+    const mentions = msg.mentions || [];
+    const porNumero = new Map(mentions.map((j) => [usuario(j), j]));
+    // um jogador por linha, por ";" ou simplesmente cada nova marcação @número
+    const segmentos = String(args).split(/\n|;|(?=@\d{5,})/).map((s) => s.trim()).filter(Boolean);
+    if (!segmentos.length) return say(uso);
+
+    const itens = [];
+    for (const seg of segmentos) {
+      const m = seg.match(/@(\d{5,})/);
+      const jogador = m ? porNumero.get(m[1]) : segmentos.length === 1 && mentions.length === 1 ? mentions[0] : null;
+      if (!jogador) return say(`Marque o jogador com @ em: "${seg}"\n\n${uso}`);
+      const st = lerManual(seg);
+      if (!st) return say(`Não entendi os números em: "${seg}"\n\n${uso}`);
+      if (st.invalido) return say(`Número muito alto em: "${seg}" (máximo ${MAXIMO_MANUAL}).`);
+      itens.push({ jogador, ...st });
+    }
+
+    const linhas = [];
+    for (const it of itens) {
+      const id = this.store.novoId('registro');
+      this.registros[id] = {
+        id, chatId: msg.chatId, jogador: it.jogador, gols: it.gols, assist: it.assist, jogos: it.jogos,
+        manual: true, printId: null, por: msg.senderId, em: this.agora(),
+      };
+      const t = this.totais(msg.chatId).get(it.jogador);
+      const partes = [];
+      if (it.gols) partes.push(`+${txtGols(it.gols)}`);
+      if (it.assist) partes.push(`+${txtAssist(it.assist)}`);
+      if (it.jogos) partes.push(`+${it.jogos} ${it.jogos === 1 ? 'jogo' : 'jogos'}`);
+      linhas.push(
+        `✅ *#${id}* ${tag(it.jogador)}: ${partes.join(' · ') || 'sem alteração'}\n` +
+        `    Total: ${t.jogos} ${t.jogos === 1 ? 'jogo' : 'jogos'} · ${txtGols(t.gols)} · ${txtAssist(t.assist)}`
+      );
+    }
+    say(`➕ *Adicionado manualmente*\n\n${linhas.join('\n')}`, itens.map((i) => i.jogador));
+  }
+
   desfazer(ctx, args) {
     const { msg, say } = ctx;
     if (!this.exigeAdmin(ctx)) return;
@@ -220,7 +281,7 @@ class Contagem {
     const r = Number.isInteger(n) ? this.registros[n] : null;
     if (!r || r.chatId !== msg.chatId || r.desfeito) return say('Use /desfazer N, com o número do registro (ex.: /desfazer 12).');
     r.desfeito = true;
-    say(`↩️ Registro *#${r.id}* desfeito (${this.nome(r.jogador)}: ${txtGols(r.gols)}, ${txtAssist(r.assist)}). O print pode ser registrado de novo.`);
+    say(`↩️ Registro *#${r.id}* desfeito (${this.nome(r.jogador)}: ${txtGols(r.gols)}, ${txtAssist(r.assist)}). ${r.printId ? 'O print pode ser registrado de novo.' : 'Adição manual removida.'}`);
   }
 
   // ---------- consultas ----------
@@ -264,4 +325,4 @@ class Contagem {
   }
 }
 
-module.exports = { Contagem, lerStats };
+module.exports = { Contagem, lerStats, lerManual };

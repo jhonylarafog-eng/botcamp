@@ -23,6 +23,7 @@ Admins do grupo (ou quem iniciou o campeonato) podem usar `/comecar`, `/cancelar
 3. Para corrigir os números: `/reg @fulano 2 gols 1 assistência`, também **respondendo ao print**. O `/reg` não funciona sem citar um print.
 4. Cada registro conta 1 partida jogada. Um mesmo print não pode ser contado duas vezes.
 5. `/desfazer N` cancela o registro número N (o print pode ser registrado de novo).
+6. **Adição manual (admin, sem print):** `/add @fulano 3 gols 2 assistências` soma direto. Opcional `4 jogos` para contar partidas (por padrão soma 0 jogos). Vários jogadores: um por linha, separados por `;` ou só marcando um depois do outro. Dá pra desfazer com `/desfazer N`.
 
 Consultas: `/lista` (jogos, gols e assistências de todos), `/artilheiros`, `/assistentes`, `/pendentes`.
 
