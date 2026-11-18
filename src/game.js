@@ -16,6 +16,7 @@ const AJUDA = `⚽ *Bot de Campeonato*
 /x1 /x2 /x3 — escolhe o modo
 /times 4 — muda a quantidade de clubes
 Depois é só *digitar o nome do clube* pra entrar nele
+/lista — times completos e times com vaga (durante as inscrições)
 /sair — sai do clube
 /comecar — (admin) começa só com os clubes completos
 /cancelar — (admin) cancela o campeonato
@@ -45,7 +46,7 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 (admin) ou corrija: /reg @fulano 2 gols 1 assistência
 (admin) /add @fulano 3 gols 2 assistências — soma direto, sem print (opcional: 4 jogos)
 (admin) /desfazer N — cancela um registro
-/lista — jogos, gols e assistências de todos
+/lista — jogos, gols e assistências de todos (durante as inscrições use /lista geral)
 /artilheiros /assistentes /pendentes
 
 *Bola de Ouro (votação)*
@@ -145,7 +146,10 @@ class Bot {
       case 'ok': return this.contagem.ok(ctx);
       case 'add': case 'adicionar': return this.contagem.adicionar(ctx, args);
       case 'desfazer': return this.contagem.desfazer(ctx, args);
-      case 'lista': return this.contagem.lista(ctx);
+      case 'lista':
+        // durante as inscrições mostra os times; "/lista geral" sempre mostra jogos/gols/assistências
+        if (camp && camp.status === 'inscricoes' && norma(args) !== 'geral') return this.listaTimes(ctx, camp);
+        return this.contagem.lista(ctx);
       case 'artilheiros': return this.contagem.top(ctx, 'gols');
       case 'assistentes': return this.contagem.top(ctx, 'assist');
       case 'pendentes': return this.contagem.pendentes(ctx);
@@ -204,6 +208,28 @@ class Bot {
 
   outroLado(p, id) {
     return p.timeA.jogadores.includes(id) ? p.timeB : p.timeA;
+  }
+
+  // mostra um time: nome, jogadores e vagas livres. marcar=true menciona (marca) os jogadores
+  blocoTime(camp, c, marcar = true) {
+    const cheio = c.jogadores.length >= camp.tamanho;
+    const linhas = c.jogadores.map((id) => `   👤 ${marcar ? tag(id) : this.nome(id)}`);
+    for (let i = c.jogadores.length; i < camp.tamanho; i++) linhas.push('   ▫️ _vaga livre_');
+    return `${cheio ? '✅' : '⚪'} *${c.nome}* (${c.jogadores.length}/${camp.tamanho})\n${linhas.join('\n')}`;
+  }
+
+  // /lista durante as inscrições: times completos e times com vagas
+  listaTimes(ctx, camp) {
+    const completos = camp.clubes.filter((c) => c.jogadores.length >= camp.tamanho);
+    const livres = camp.clubes.filter((c) => c.jogadores.length < camp.tamanho);
+    const vagas = livres.reduce((n, c) => n + camp.tamanho - c.jogadores.length, 0);
+    let txt = `📋 *Times — ${camp.modo.toUpperCase()}*`;
+    if (camp.aleatorio) txt += ' 🎲';
+    txt += `\n✅ ${completos.length} completo${completos.length === 1 ? '' : 's'} · 🟢 ${livres.length} com vaga · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
+    if (completos.length) txt += `\n\n*Completos*\n` + completos.map((c) => this.blocoTime(camp, c, false)).join('\n\n');
+    if (livres.length) txt += `\n\n*Com vagas*\n` + livres.map((c) => this.blocoTime(camp, c, false)).join('\n\n');
+    txt += `\n\n👉 Digite o nome do clube pra entrar.`;
+    ctx.say(txt);
   }
 
   formatClubes(camp) {
@@ -381,15 +407,15 @@ class Bot {
     if (clube.jogadores.length >= camp.tamanho) {
       return say(`O ${clube.nome} já está completo (${camp.tamanho}/${camp.tamanho}). Escolha outro clube!`);
     }
-    let trocou = null;
+    let antigo = null;
     for (const c of camp.clubes) {
       const i = c.jogadores.indexOf(id);
-      if (i >= 0) { c.jogadores.splice(i, 1); trocou = c.nome; }
+      if (i >= 0) { c.jogadores.splice(i, 1); antigo = c; }
     }
     clube.jogadores.push(id);
-    say(
-      `✅ ${this.nome(id)} ${trocou ? `saiu do ${trocou} e ` : ''}entrou no *${clube.nome}* (${clube.jogadores.length}/${camp.tamanho})`
-    );
+    let txt = `✅ ${this.nome(id)} ${antigo ? `saiu do ${antigo.nome} e ` : ''}entrou no time!\n\n${this.blocoTime(camp, clube)}`;
+    if (antigo) txt += `\n\n_Como ficou o ${antigo.nome}:_\n${this.blocoTime(camp, antigo, false)}`;
+    say(txt, [...clube.jogadores]);
     if (camp.clubes.every((c) => c.jogadores.length >= camp.tamanho)) {
       return camp.aleatorio ? this.comecarAleatorio(ctx, camp) : this.comecarMataMata(ctx, camp);
     }
@@ -403,7 +429,7 @@ class Bot {
       const i = c.jogadores.indexOf(id);
       if (i >= 0) {
         c.jogadores.splice(i, 1);
-        return say(`👋 ${this.nome(id)} saiu do ${c.nome} (${c.jogadores.length}/${camp.tamanho})`);
+        return say(`👋 ${this.nome(id)} saiu do time.\n\n${this.blocoTime(camp, c, false)}`);
       }
     }
     say('Você não está em nenhum clube.');

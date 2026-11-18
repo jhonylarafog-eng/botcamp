@@ -99,4 +99,28 @@ function novo() {
   assert.match(diz(ADMIN, '/final', true), /Modo aleatório/);
 }
 
+// ---------- 4) times mostrados ao entrar e /lista ----------
+{
+  const { diz, camp } = novo();
+  const A = id(1), B = id(2), C = id(3);
+  diz(ADMIN, '/x2aleatorio final', true);
+  const [c1, c2] = camp().clubes.map((c) => c.nome);
+  let t = diz(A, c1);
+  assert.match(t, new RegExp(`\\*${c1}\\* \\(1/2\\)`));
+  assert.match(t, /@5511900000001/);
+  assert.match(t, /vaga livre/);
+  diz(B, c1);
+  assert.match(t = diz(C, c2), new RegExp(`\\*${c2}\\* \\(1/2\\)`));
+  // /lista mostra completos e com vagas
+  t = diz(A, '/lista');
+  assert.match(t, /Completos[\s\S]*Com vagas/);
+  assert.match(t, new RegExp(`✅ \\*${c1}\\* \\(2/2\\)`));
+  assert.match(t, new RegExp(`⚪ \\*${c2}\\* \\(1/2\\)`));
+  // trocar de clube mostra os dois
+  t = diz(A, c2);
+  assert.match(t, /saiu do .* e entrou no time/);
+  // /lista geral continua sendo a contagem
+  assert.doesNotMatch(diz(A, '/lista geral'), /Completos/);
+}
+
 console.log('\n✅ MODO ALEATÓRIO: TODOS OS TESTES PASSARAM');

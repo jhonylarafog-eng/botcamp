@@ -84,3 +84,8 @@ O admin manda `/x3aleatorio` (ou `/x1aleatorio`, `/x2aleatorio`). Dá pra já in
 4. O admin pode usar `/comecar` pra sortear antes de encher: forma quantos times completos der (mínimo 2) e quem sobrar fica de fora.
 
 Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`).
+
+## Times durante as inscrições
+
+- Quando alguém entra num clube, o bot mostra o time (nome + jogadores marcados + vagas livres).
+- `/lista` mostra todos os times: completos e com vagas. Para ver jogos/gols/assistências durante as inscrições, use `/lista geral`.
