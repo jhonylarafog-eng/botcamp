@@ -19,6 +19,7 @@ const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Brow
 
 const { Store } = require('./store');
 const { Bot } = require('./game');
+const { criarVigia } = require('./castigo_wa');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'dados');
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -185,6 +186,7 @@ async function enviarRespostas(sock, respostas) {
   try {
     for (const r of respostas) {
       if (r.grupo) { await mudarGrupo(sock, r.chatId, r.grupo, estadoGrupo); continue; }
+      if (r.castigo) { await aplicarCastigo(sock, r.chatId, r.castigo); continue; }
       let res;
       if (r.video) {
         const buffer = fs.readFileSync(r.video.arquivo);
@@ -201,6 +203,10 @@ async function enviarRespostas(sock, respostas) {
     if (estadoGrupo.fechadoPorMim && chatId) await mudarGrupo(sock, chatId, 'abrir', estadoGrupo);
   }
 }
+
+const vigia = criarVigia({ bot, store, lembrarEnviado });
+const { aplicarCastigo, varrerCastigos, varrerTodos } = vigia;
+const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
 async function processar(sock, m) {
   if (!m.message) return;
@@ -293,6 +299,7 @@ async function conectar() {
       estado.qr = null;
       estado.aviso = 'Conectado ✅';
       console.log('✅ Conectado ao WhatsApp.');
+      varrerTodos(sock).catch(() => {}); // confere os castigos logo ao conectar
     }
 
     if (connection === 'close') {
@@ -305,6 +312,13 @@ async function conectar() {
       }
       agendarReconexao();
     }
+  });
+
+  // alguém foi promovido a admin: se estiver de castigo, tira de novo (vale pra qualquer um que promover, inclusive outro bot)
+  sock.ev.on('group-participants.update', ({ id, action }) => {
+    if (action !== 'promote') return;
+    if (!bot.castigo.ativosDoChat(id).length) return;
+    dormir(1500).then(() => varrerCastigos(sock, id, 'promoção')).catch(() => {});
   });
 
   sock.ev.on('messages.upsert', ({ messages, type }) => {
@@ -372,6 +386,11 @@ conectar().catch((e) => {
   console.error('Erro ao iniciar:', e);
   agendarReconexao();
 });
+
+// a cada 2 minutos confere os castigos (rede de segurança, caso algum aviso do WhatsApp se perca)
+setInterval(() => {
+  if (sockAtual && estado.conectado) varrerTodos(sockAtual).catch(() => {});
+}, 2 * 60_000).unref();
 
 process.on('SIGTERM', () => { store.salvarAgora(); process.exit(0); });
 process.on('unhandledRejection', (e) => console.error('unhandledRejection:', e));

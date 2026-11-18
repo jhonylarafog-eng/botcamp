@@ -99,3 +99,11 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 - Plano B se a reação não funcionar: `/puskas votar N`.
 - **Admin:** `/encerrar puskas` apura, revela os autores, reenvia o vídeo vencedor e soma 1 Puskas pro autor ("@fulano agora tem 2 Puskas"). **A votação não fecha sozinha: o admin precisa mandar `/encerrar puskas`.** `/puskas hall` (ou `/puskas ranking`) mostra todo mundo que já ganhou, com a contagem, marcando as pessoas. Tudo fica salvo no volume. Em caso de empate, todos os empatados vencem. `/puskas cancelar` descarta a votação.
 - Os vídeos ficam em `DATA_DIR/puskas`. Os que não ganham são apagados na apuração; sobras antigas são apagadas depois de 3 dias.
+
+## Castigo (tirar o admin por 24h)
+
+- **Admin:** `/castigo @fulano` tira o admin da pessoa por **24 horas**. `/perdoar @fulano` encerra antes da hora. `/castigos` mostra quem está de castigo e quanto falta.
+- Durante o castigo, **ninguém consegue promover a pessoa de novo** (nem manualmente, nem por outro bot): quando o WhatsApp avisa que ela virou admin, o bot tira o admin na hora e avisa o grupo. Há também uma conferência a cada 2 minutos e ao reconectar, caso algum aviso se perca.
+- Depois de 24h o castigo acaba sozinho (o bot não promove ninguém; um admin pode promover de novo).
+- **O número do bot precisa ser admin do grupo.** O bot não consegue rebaixar a dona (criadora) do grupo.
+- Os castigos ficam salvos no volume, então sobrevivem a reinícios.

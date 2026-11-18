@@ -8,6 +8,7 @@ const rank = require('./rankings');
 const { Contagem } = require('./contagem');
 const { Votacao } = require('./votacao');
 const { Puskas } = require('./puskas');
+const { Castigo } = require('./castigo');
 
 const AJUDA = `⚽ *Bot de Campeonato*
 
@@ -62,7 +63,12 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 por dia)
 (admin) /iniciar puskas — mostra os gols um a um; vote *reagindo* no vídeo
 (admin) /encerrar puskas — apura o Gol Puskas do dia
-/puskas lista · /puskas hall`;
+/puskas lista · /puskas hall
+
+*Castigo (admin)*
+(admin) /castigo @fulano — tira o admin por 24h e ninguém consegue promover de novo
+(admin) /perdoar @fulano — encerra o castigo antes da hora
+/castigos — quem está de castigo`;
 
 const ETAPAS = { final: 2, semi: 4, quartas: 8, oitavas: 16 };
 const norma = (s) => norm(s).replace(/ /g, '');
@@ -74,6 +80,7 @@ class Bot {
     this.prefix = prefix;
     this.rng = rng;
     this.puskas = new Puskas(store, { prefix, dataDir, agora });
+    this.castigo = new Castigo(store, { agora });
     this.contagem = new Contagem(store, { prefix });
     this.votacao = new Votacao(store, this.contagem);
   }
@@ -87,7 +94,9 @@ class Bot {
       out.push({ chatId: msg.chatId, text, mentions, video: { arquivo }, onSent });
     // grupo('fechar'|'abrir'): pede ao conector pra fechar (só admins falam) ou abrir o grupo
     const grupo = (acao) => out.push({ chatId: msg.chatId, grupo: acao });
-    const ctx = { msg, say, sayVideo, grupo };
+    // castigo(dados): pede ao conector pra tirar o admin da pessoa e só então avisar o grupo
+    const castigo = (dados) => out.push({ chatId: msg.chatId, castigo: dados });
+    const ctx = { msg, say, sayVideo, grupo, castigo };
     try {
       this._handle(ctx);
     } catch (e) {
@@ -138,6 +147,9 @@ class Bot {
         return this.iniciar(ctx, camp, args);
       case 'iniciarpuskas': return this.puskas.iniciar(ctx);
       case 'puskas': return this.puskas.comando(ctx, args);
+      case 'castigo': case 'rebaixar': case 'tiraradm': case 'tiraradmin': return this.castigo.aplicar(ctx, args);
+      case 'perdoar': return this.castigo.perdoar(ctx, args);
+      case 'castigos': return this.castigo.lista(ctx);
       case 'votarpuskas': return this.puskas.votarTexto(ctx, args);
       case 'champions': case 'libertadores': case 'brasileirao':
         return this.escolherCompeticao(ctx, camp, cmd);
