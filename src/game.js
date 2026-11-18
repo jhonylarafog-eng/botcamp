@@ -7,6 +7,7 @@ const { norm, acharClube } = require('./text');
 const rank = require('./rankings');
 const { Contagem } = require('./contagem');
 const { Votacao } = require('./votacao');
+const { Puskas } = require('./puskas');
 
 const AJUDA = `⚽ *Bot de Campeonato*
 
@@ -55,17 +56,24 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 /votos — quem votou, quem falta e a parcial
 (admin) /encerrar — apura e anuncia o campeão
 (admin) /cancelarvotacao — descarta
-/hall — campeões anteriores`;
+/hall — campeões anteriores
+
+*Prêmio Puskas (gol mais bonito do dia)*
+Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 por dia)
+(admin) /iniciar puskas — mostra os gols um a um; vote *reagindo* no vídeo
+(admin) /encerrar puskas — apura o Gol Puskas do dia
+/puskas lista · /puskas hall`;
 
 const ETAPAS = { final: 2, semi: 4, quartas: 8, oitavas: 16 };
 const norma = (s) => norm(s).replace(/ /g, '');
 const tag = (id) => `@${id.split('@')[0]}`;
 
 class Bot {
-  constructor(store, { prefix = '/', rng = Math.random } = {}) {
+  constructor(store, { prefix = '/', rng = Math.random, dataDir = null, agora = () => Date.now() } = {}) {
     this.store = store;
     this.prefix = prefix;
     this.rng = rng;
+    this.puskas = new Puskas(store, { prefix, dataDir, agora });
     this.contagem = new Contagem(store, { prefix });
     this.votacao = new Votacao(store, this.contagem);
   }
@@ -74,7 +82,10 @@ class Bot {
   handle(msg) {
     const out = [];
     const say = (text, mentions = []) => out.push({ chatId: msg.chatId, text, mentions });
-    const ctx = { msg, say };
+    // sayVideo: pede ao conector pra enviar um vídeo (arquivo) e avisar o id da mensagem enviada
+    const sayVideo = (arquivo, text, mentions = [], onSent = null) =>
+      out.push({ chatId: msg.chatId, text, mentions, video: { arquivo }, onSent });
+    const ctx = { msg, say, sayVideo };
     try {
       this._handle(ctx);
     } catch (e) {
@@ -83,6 +94,17 @@ class Bot {
     }
     this.store.salvar();
     return out;
+  }
+
+  // reação (emoji) a uma mensagem do grupo: usada na votação do Puskas
+  reacao(evt) {
+    try {
+      this.puskas.reacao(evt);
+    } catch (e) {
+      console.error('Erro ao tratar reação:', e);
+    }
+    this.store.salvar();
+    return [];
   }
 
   _handle(ctx) {
@@ -109,7 +131,12 @@ class Bot {
     switch (cmd) {
       case 'ajuda': case 'comandos': case 'help': case 'menu':
         return say(AJUDA);
-      case 'iniciar': return this.iniciar(ctx, camp, args);
+      case 'iniciar':
+        if (norma(args.split(/\s+/)[0]) === 'puskas') return this.puskas.iniciar(ctx);
+        return this.iniciar(ctx, camp, args);
+      case 'iniciarpuskas': return this.puskas.iniciar(ctx);
+      case 'puskas': return this.puskas.comando(ctx, args);
+      case 'votarpuskas': return this.puskas.votarTexto(ctx, args);
       case 'champions': case 'libertadores': case 'brasileirao':
         return this.escolherCompeticao(ctx, camp, cmd);
       case 'x1': case 'x2': case 'x3':
@@ -157,7 +184,10 @@ class Bot {
       case 'bolaouro': case 'bolaodeouro': case 'votacao': return this.votacao.abrir(ctx, args);
       case 'votar': case 'voto': return this.votacao.votar(ctx, args);
       case 'votos': return this.votacao.votos(ctx);
-      case 'encerrar': return this.votacao.encerrar(ctx);
+      case 'encerrar':
+        if (norma(args) === 'puskas') return this.puskas.encerrar(ctx);
+        return this.votacao.encerrar(ctx);
+      case 'encerrarpuskas': return this.puskas.encerrar(ctx);
       case 'cancelarvotacao': return this.votacao.cancelar(ctx);
       case 'hall': return this.votacao.hall(ctx);
       default: return; // comando desconhecido: ignora (pode ser de outro bot)

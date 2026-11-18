@@ -15,7 +15,7 @@ const pino = require('pino');
 const baileys = require('@whiskeysockets/baileys');
 
 const makeWASocket = baileys.default || baileys.makeWASocket;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, jidNormalizedUser } = baileys;
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, jidNormalizedUser, downloadMediaMessage } = baileys;
 
 const { Store } = require('./store');
 const { Bot } = require('./game');
@@ -32,7 +32,7 @@ if (!ADMIN_KEY) {
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const store = new Store(path.join(DATA_DIR, 'campeonatos.json'));
-const bot = new Bot(store, { prefix: PREFIX });
+const bot = new Bot(store, { prefix: PREFIX, dataDir: DATA_DIR });
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
 const estado = { conectado: false, codigo: null, codigoEm: 0, qr: null, aviso: 'Iniciando...' };
@@ -117,6 +117,60 @@ function extrair(mensagem) {
   return { text, temImagem: ehImagem(msg), mentions, quoted };
 }
 
+
+// ---------- vídeo do gol (Puskas) ----------
+const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
+const numero = (x) => (x && typeof x.toNumber === 'function' ? x.toNumber() : Number(x) || 0);
+
+// Acha o vídeo na própria mensagem (legenda "/puskas") ou na mensagem citada (respondeu ao vídeo)
+function acharVideo(m, chatId) {
+  const msg = desembrulhar(m.message);
+  if (msg.videoMessage) {
+    return { waMsg: m, id: m.key.id, autor: null, tamanho: numero(msg.videoMessage.fileLength) };
+  }
+  const ci = msg.extendedTextMessage?.contextInfo || null;
+  const q = ci?.quotedMessage ? desembrulhar(ci.quotedMessage) : null;
+  if (q?.videoMessage && ci.stanzaId) {
+    return {
+      waMsg: { key: { remoteJid: chatId, id: ci.stanzaId, participant: ci.participant, fromMe: false }, message: ci.quotedMessage },
+      id: ci.stanzaId, autor: ci.participant || null, tamanho: numero(q.videoMessage.fileLength),
+    };
+  }
+  return null;
+}
+
+// Baixa o vídeo do gol pra pasta de dados. Retorna { video } ou { erro }.
+async function baixarVideoDoGol(sock, m, chatId) {
+  const v = acharVideo(m, chatId);
+  if (!v) return {};
+  if (v.tamanho > MAX_VIDEO_BYTES) return { erro: 'Esse vídeo é grande demais (máx. 40 MB). Mande um menor.' };
+  try {
+    const buffer = await downloadMediaMessage(v.waMsg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
+    const rel = path.join('puskas', `${v.id.replace(/[^\w-]/g, '')}.mp4`);
+    fs.mkdirSync(path.join(DATA_DIR, 'puskas'), { recursive: true });
+    fs.writeFileSync(path.join(DATA_DIR, rel), buffer);
+    return { video: { arquivo: rel, id: v.id, autor: v.autor } };
+  } catch (e) {
+    console.error('Falha ao baixar o vídeo do gol:', e.message);
+    return { erro: 'Não consegui baixar esse vídeo. Tente mandar de novo.' };
+  }
+}
+
+async function enviarRespostas(sock, respostas) {
+  for (const r of respostas) {
+    let res;
+    if (r.video) {
+      const buffer = fs.readFileSync(r.video.arquivo);
+      res = await sock.sendMessage(r.chatId, { video: buffer, caption: r.text, mentions: r.mentions, mimetype: 'video/mp4' });
+      await new Promise((ok) => setTimeout(ok, 1500)); // um de cada vez, sem atropelar
+    } else {
+      res = await sock.sendMessage(r.chatId, { text: r.text, mentions: r.mentions });
+    }
+    lembrarEnviado(res);
+    if (r.onSent) { r.onSent(res?.key?.id); store.salvar(); }
+  }
+}
+
 async function processar(sock, m) {
   if (!m.message) return;
   if (m.key.fromMe && enviados.has(m.key.id)) return;
@@ -126,20 +180,34 @@ async function processar(sock, m) {
   const senderId = m.key.participant || m.participant || (m.key.fromMe ? meuId : null);
   if (!senderId) return;
 
+  // reação (emoji) a uma mensagem: conta como voto na votação do Puskas
+  const reacao = desembrulhar(m.message).reactionMessage;
+  if (reacao) {
+    const msgId = reacao.key?.id;
+    console.log(`Reação recebida: "${reacao.text || '(removida)'}" na mensagem ${msgId}`);
+    bot.reacao({ chatId, senderId, msgId, emoji: reacao.text || '' });
+    return;
+  }
+
   const { text, temImagem, mentions, quoted } = extrair(m.message);
   if (!text && !temImagem) return;
 
   const comando = text.trim().startsWith(PREFIX);
   // o dono da conta (quando ele mesmo digita) sempre é admin do bot
   const isAdmin = m.key.fromMe ? true : comando ? await ehAdmin(sock, chatId, senderId) : false;
+  // /puskas com vídeo (na legenda ou respondendo a um vídeo): baixa antes de passar pro bot
+  let video = null;
+  let videoErro = null;
+  if (comando && text.trim().toLowerCase().startsWith(PREFIX + 'puskas')) {
+    const r = await baixarVideoDoGol(sock, m, chatId);
+    video = r.video || null;
+    videoErro = r.erro || null;
+  }
   const respostas = bot.handle({
     chatId, senderId, senderName: m.pushName, text, isAdmin,
-    id: m.key.id, temImagem, mentions, quoted,
+    id: m.key.id, temImagem, mentions, quoted, video, videoErro,
   });
-  for (const r of respostas) {
-    const res = await sock.sendMessage(r.chatId, { text: r.text, mentions: r.mentions });
-    lembrarEnviado(res);
-  }
+  await enviarRespostas(sock, respostas);
 }
 
 // ---------- conexão ----------

@@ -89,3 +89,13 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 
 - Quando alguém entra num clube, o bot mostra o time (nome + jogadores marcados + vagas livres).
 - `/lista` mostra todos os times: completos e com vagas. Para ver jogos/gols/assistências durante as inscrições, use `/lista geral`.
+
+## Prêmio Puskas (gol mais bonito do dia)
+
+- O jogador manda o **vídeo do gol com a legenda `/puskas`** (ou responde ao vídeo com `/puskas`). Máximo de **10 gols por dia**; o 11º é recusado.
+- `/puskas lista` mostra os gols de hoje. `/puskas remover N` tira um gol (o autor ou admin).
+- **Admin:** `/iniciar puskas` reenvia os gols de hoje, um de cada vez (Gol 1, Gol 2...), de forma anônima. Precisa de pelo menos 2 gols.
+- A votação é por **reação**: cada pessoa reage (qualquer emoji) no vídeo do gol que achou mais bonito. 1 voto por pessoa (reagir em outro gol muda o voto; tirar a reação tira o voto). Não vale votar no próprio gol.
+- Plano B se a reação não funcionar: `/puskas votar N`.
+- **Admin:** `/encerrar puskas` apura, revela os autores, reenvia o vídeo vencedor e guarda no `/puskas hall`. Em caso de empate, todos os empatados vencem. `/puskas cancelar` descarta a votação.
+- Os vídeos ficam em `DATA_DIR/puskas`. Os que não ganham são apagados na apuração; sobras antigas são apagadas depois de 3 dias.
