@@ -72,3 +72,15 @@ npm test
 
 - A conexão usa uma biblioteca **não oficial** (Baileys). Use um número só do bot; existe risco de banimento do número
 - Os dados ficam num arquivo JSON, suficiente para grupos de amigos
+
+
+## Modo aleatório
+
+O admin manda `/x3aleatorio` (ou `/x1aleatorio`, `/x2aleatorio`). Dá pra já incluir a competição e a fase: `/x3aleatorio libertadores quartas`.
+
+1. O bot mostra as fases: `/final` (2 times), `/semi` (4), `/quartas` (8), `/oitavas` (16). Só admin escolhe.
+2. Aparecem os clubes e cada pessoa digita o nome de um clube pra entrar.
+3. Quando todas as vagas enchem, o bot **embaralha os jogadores entre os times** e **sorteia os confrontos**.
+4. O admin pode usar `/comecar` pra sortear antes de encher: forma quantos times completos der (mínimo 2) e quem sobrar fica de fora.
+
+Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`).

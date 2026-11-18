@@ -20,6 +20,12 @@ Depois é só *digitar o nome do clube* pra entrar nele
 /comecar — (admin) começa só com os clubes completos
 /cancelar — (admin) cancela o campeonato
 
+*Modo aleatório*
+(admin) /x3aleatorio — abre o sorteio (também /x1aleatorio /x2aleatorio)
+Escolha a fase: /final /semi /quartas /oitavas
+Todo mundo escolhe um clube; quando enche, o bot embaralha os jogadores entre os times e sorteia os confrontos
+(admin) /comecar — sorteia agora com quem já entrou
+
 *Durante os jogos*
 *cria* — o time ADVERSÁRIO vai criar a sala
 /sala CÓDIGO — manda o código da sala
@@ -50,6 +56,7 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 (admin) /cancelarvotacao — descarta
 /hall — campeões anteriores`;
 
+const ETAPAS = { final: 2, semi: 4, quartas: 8, oitavas: 16 };
 const norma = (s) => norm(s).replace(/ /g, '');
 const tag = (id) => `@${id.split('@')[0]}`;
 
@@ -105,7 +112,13 @@ class Bot {
       case 'champions': case 'libertadores': case 'brasileirao':
         return this.escolherCompeticao(ctx, camp, cmd);
       case 'x1': case 'x2': case 'x3':
+        if (norma(args).includes('aleatorio')) return this.iniciarAleatorio(ctx, camp, cmd, args);
         return this.escolherModo(ctx, camp, cmd);
+      case 'x1aleatorio': case 'x2aleatorio': case 'x3aleatorio':
+        return this.iniciarAleatorio(ctx, camp, cmd.slice(0, 2), args);
+      case 'final': case 'semi': case 'semifinal': case 'semifinais':
+      case 'quartas': case 'quartasdefinal': case 'oitavas': case 'oitavasdefinal':
+        return this.escolherEtapa(ctx, camp, ETAPAS[cmd.replace(/definal$|finais?$/, '') || 'final'] || ETAPAS[cmd]);
       case 'times': return this.mudarTimes(ctx, camp, args);
       case 'time': return this.entrar(ctx, camp, args, true);
       case 'sair': return this.sair(ctx, camp);
@@ -264,12 +277,79 @@ class Bot {
     say(this.textoInscricoes(camp));
   }
 
+  // ---------- modo aleatório ----------
+  // /x3aleatorio [competição] [fase]  — admin abre; todos escolhem clube; o bot embaralha jogadores e confrontos
+  iniciarAleatorio(ctx, camp, modo, args) {
+    const { say, msg } = ctx;
+    if (!msg.isAdmin) return say('Só admin abre o modo aleatório.');
+    if (camp) return say('Já tem um campeonato rolando aqui. Use /status pra ver, ou /cancelar (admin) pra encerrar.');
+    if (!MODOS[modo]) return;
+    this.registrar(ctx);
+    const toks = String(args || '').split(/\s+/).map(norma).filter(Boolean);
+    const comp = toks.find((t) => COMPETICOES[t]) || 'champions';
+    const fase = toks.find((t) => ETAPAS[t.replace(/definal$|finais?$/, '') || 'final']);
+    const id = this.store.novoId('campeonato');
+    const novo = {
+      id, chatId: msg.chatId, organizador: msg.senderId, status: 'etapa', aleatorio: true,
+      competicao: comp, modo, tamanho: MODOS[modo], clubes: [], rodada: 0,
+      partidas: [], passaram: [], criadoEm: Date.now(),
+    };
+    this.store.data.campeonatos[id] = novo;
+    this.store.data.ativos[msg.chatId] = id;
+    if (fase) return this.escolherEtapa(ctx, novo, ETAPAS[fase.replace(/definal$|finais?$/, '') || 'final']);
+    const t = novo.tamanho;
+    const linha = (cmd, n) => `${cmd} — ${n} times (${n * t} jogadores)`;
+    say(
+      `🎲 *Modo aleatório ${modo.toUpperCase()}* — ${COMPETICOES[comp].nome}\n` +
+      `Admin, escolha até onde vai o mata-mata:\n\n` +
+      [['/final', 2], ['/semi', 4], ['/quartas', 8], ['/oitavas', 16]].map(([c, n]) => linha(c, n)).join('\n')
+    );
+  }
+
+  escolherEtapa(ctx, camp, n) {
+    const { say, msg } = ctx;
+    if (!camp || camp.status !== 'etapa' || !n) return;
+    if (!msg.isAdmin) return say('Só admin escolhe a fase.');
+    const pool = COMPETICOES[camp.competicao].clubes.length;
+    if (n > pool) return say(`Essa competição só tem ${pool} clubes. Escolha uma fase menor.`);
+    this.sortearClubes(camp, n);
+    camp.status = 'inscricoes';
+    say(this.textoInscricoes(camp));
+  }
+
+  // embaralha todos os inscritos entre os clubes e começa o mata-mata (confrontos também sorteados)
+  comecarAleatorio(ctx, camp) {
+    const { say } = ctx;
+    const jogadores = camp.clubes.flatMap((c) => c.jogadores);
+    const k = Math.min(Math.floor(jogadores.length / camp.tamanho), camp.clubes.length);
+    if (k < 2) {
+      return say(`Precisa de pelo menos ${2 * camp.tamanho} jogadores pra sortear (tem ${jogadores.length}).`);
+    }
+    const embaralhados = this.embaralhar(jogadores);
+    const clubes = this.embaralhar(camp.clubes).slice(0, k).map((c, i) => ({
+      nome: c.nome, apelidos: c.apelidos,
+      jogadores: embaralhados.slice(i * camp.tamanho, (i + 1) * camp.tamanho),
+    }));
+    const reservas = embaralhados.slice(k * camp.tamanho);
+    camp.clubes = clubes;
+    camp.numClubes = k;
+    camp.status = 'andamento';
+
+    let txt = `🎲 *Sorteio feito!* Jogadores embaralhados entre os times:\n\n` +
+      clubes.map((c) => `⚽ *${c.nome}* — ${c.jogadores.map(tag).join(' ')}`).join('\n');
+    if (reservas.length) txt += `\n\n🪑 Ficaram de fora (faltou gente pra completar): ${reservas.map(tag).join(' ')}`;
+    say(txt, [...clubes.flatMap((c) => c.jogadores), ...reservas]);
+    this.proximaRodada(ctx, camp, clubes.map((c) => c.nome));
+  }
+
   textoInscricoes(camp) {
     const comp = COMPETICOES[camp.competicao];
     return (
       `${comp.emoji} *${comp.nome} — ${camp.modo.toUpperCase()}* (${camp.tamanho} contra ${camp.tamanho})\n` +
       `Mata-mata com ${camp.clubes.length} clubes.\n\n` +
-      `👉 *Digite o nome do clube* pra entrar no time!\n\n` +
+      (camp.aleatorio
+        ? `🎲 *Modo aleatório:* escolha um clube pra entrar. Quando encher, o bot *embaralha os jogadores entre os times* e sorteia os confrontos!\n\n👉 *Digite o nome do clube*\n\n`
+        : `👉 *Digite o nome do clube* pra entrar no time!\n\n`) +
       this.formatClubes(camp) +
       `\n\nQuer outra quantidade de clubes? /times 4 (reinicia as inscrições)`
     );
@@ -310,7 +390,9 @@ class Bot {
     say(
       `✅ ${this.nome(id)} ${trocou ? `saiu do ${trocou} e ` : ''}entrou no *${clube.nome}* (${clube.jogadores.length}/${camp.tamanho})`
     );
-    if (camp.clubes.every((c) => c.jogadores.length >= camp.tamanho)) this.comecarMataMata(ctx, camp);
+    if (camp.clubes.every((c) => c.jogadores.length >= camp.tamanho)) {
+      return camp.aleatorio ? this.comecarAleatorio(ctx, camp) : this.comecarMataMata(ctx, camp);
+    }
   }
 
   sair(ctx, camp) {
@@ -340,6 +422,7 @@ class Bot {
     const { say } = ctx;
     if (!camp || camp.status !== 'inscricoes') return;
     if (!this.ehOrg(ctx, camp)) return say('Só quem iniciou (ou um admin) pode começar antes da hora.');
+    if (camp.aleatorio) return this.comecarAleatorio(ctx, camp);
     const completos = camp.clubes.filter((c) => c.jogadores.length >= camp.tamanho);
     if (completos.length < 2) return say('Precisa de pelo menos 2 clubes completos pra começar.');
     camp.clubes = completos;
@@ -600,6 +683,7 @@ class Bot {
     if (!camp) return say('Nenhum campeonato rolando. Use /iniciar pra começar um.');
     if (camp.status === 'competicao') return say('Escolha a competição: ' + Object.keys(COMPETICOES).map((k) => '/' + k).join(' '));
     if (camp.status === 'modo') return say('Escolha o modo: /x1 /x2 /x3');
+    if (camp.status === 'etapa') return say('Admin, escolha a fase: /final /semi /quartas /oitavas');
     if (camp.status === 'inscricoes') return say(this.textoInscricoes(camp));
     const icone = { aguardando_cria: '⏳', aguardando_sala: '🔧', jogando: '🎮', aguardando_confirmacao: '📝', finalizada: '✅' };
     const linhas = this.partidasDaRodada(camp).map((p) => {
