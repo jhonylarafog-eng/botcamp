@@ -26,7 +26,7 @@ function novoVideo(autor) {
 }
 function diz(quem, texto, extra = {}, isAdmin = false) {
   const r = bot.handle({ chatId: CHAT, senderId: quem, senderName: quem.split('@')[0], text: texto, isAdmin, ...extra });
-  const t = r.map((x) => (x.video ? `[VÍDEO] ${x.text}` : x.text)).join('\n---\n');
+  const t = r.map((x) => (x.grupo ? `[GRUPO: ${x.grupo}]` : x.video ? `[VÍDEO] ${x.text}` : x.text)).join('\n---\n');
   console.log(`\n[${quem.split('@')[0]}] ${texto}\n${t.split('\n').map((l) => '  ‹ ' + l).join('\n')}`);
   return { r, t };
 }
@@ -71,10 +71,16 @@ assert.strictEqual(videos.length, 10);
 assert.match(videos[0].text, /GOL 1\* de 10 — gol do @\d+/);
 assert.match(videos[0].text, /Reaja nesse gol se você achou ele o mais bonito/);
 assert.strictEqual(videos[0].mentions.length, 1); // marca o autor
-assert.match(r[0].text, /Como funciona[\s\S]*reação[\s\S]*voto \*muda\*[\s\S]*mais bonito de verdade/);
-assert.ok(r.indexOf(r[0]) < r.indexOf(videos[0]), 'a explicação vem antes dos vídeos');
+assert.deepStrictEqual(r.filter((x) => x.grupo).map((x) => x.grupo), ['fechar', 'abrir']);
+const expl = r.find((x) => x.text);
+assert.match(expl.text, /fechar o grupo/);
+assert.match(expl.text, /Como funciona[\s\S]*reação[\s\S]*voto \*muda\*[\s\S]*mais bonito de verdade/);
+assert.ok(r.indexOf(expl) < r.indexOf(videos[0]), 'a explicação vem antes dos vídeos');
+assert.strictEqual(r[0].grupo, 'fechar', 'fecha o grupo antes de tudo');
+assert.ok(r.indexOf(videos[9]) < r.findIndex((x) => x.grupo === 'abrir'), 'reabre depois do último vídeo');
 assert.match(videos[9].text, /GOL 10\* de 10/);
 assert.match(r[r.length - 1].text, /Votação aberta/);
+assert.strictEqual(r[r.length - 2].grupo, 'abrir');
 assert.ok(r.indexOf(videos[0]) < r.indexOf(r[r.length - 1]));
 videos.forEach((v, i) => v.onSent(`BOT${i + 1}`)); // o conector avisa o id de cada vídeo enviado
 assert.match(diz(ADMIN, '/iniciar puskas', {}, true).t, /Já tem uma votação/);

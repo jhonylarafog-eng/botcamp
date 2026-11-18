@@ -85,7 +85,9 @@ class Bot {
     // sayVideo: pede ao conector pra enviar um vídeo (arquivo) e avisar o id da mensagem enviada
     const sayVideo = (arquivo, text, mentions = [], onSent = null) =>
       out.push({ chatId: msg.chatId, text, mentions, video: { arquivo }, onSent });
-    const ctx = { msg, say, sayVideo };
+    // grupo('fechar'|'abrir'): pede ao conector pra fechar (só admins falam) ou abrir o grupo
+    const grupo = (acao) => out.push({ chatId: msg.chatId, grupo: acao });
+    const ctx = { msg, say, sayVideo, grupo };
     try {
       this._handle(ctx);
     } catch (e) {

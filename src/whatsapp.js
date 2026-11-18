@@ -156,18 +156,49 @@ async function baixarVideoDoGol(sock, m, chatId) {
   }
 }
 
-async function enviarRespostas(sock, respostas) {
-  for (const r of respostas) {
-    let res;
-    if (r.video) {
-      const buffer = fs.readFileSync(r.video.arquivo);
-      res = await sock.sendMessage(r.chatId, { video: buffer, caption: r.text, mentions: r.mentions, mimetype: 'video/mp4' });
-      await new Promise((ok) => setTimeout(ok, 1500)); // um de cada vez, sem atropelar
-    } else {
-      res = await sock.sendMessage(r.chatId, { text: r.text, mentions: r.mentions });
+// Fecha (só admins falam) ou abre o grupo. O bot precisa ser admin do grupo.
+async function mudarGrupo(sock, chatId, acao, estadoGrupo) {
+  if (acao === 'fechar') {
+    try {
+      const meta = await sock.groupMetadata(chatId);
+      if (meta.announce) return; // já estava fechado: não mexe (e não reabre depois)
+      await sock.groupSettingUpdate(chatId, 'announcement');
+      estadoGrupo.fechadoPorMim = true;
+    } catch (e) {
+      console.error('Não consegui fechar o grupo:', e.message);
+      const res = await sock.sendMessage(chatId, { text: '⚠️ Não consegui fechar o grupo (o bot precisa ser admin do grupo). Sigo mesmo assim.' });
+      lembrarEnviado(res);
     }
-    lembrarEnviado(res);
-    if (r.onSent) { r.onSent(res?.key?.id); store.salvar(); }
+  } else if (estadoGrupo.fechadoPorMim) {
+    try {
+      await sock.groupSettingUpdate(chatId, 'not_announcement');
+      estadoGrupo.fechadoPorMim = false;
+    } catch (e) {
+      console.error('Não consegui reabrir o grupo:', e.message);
+    }
+  }
+}
+
+async function enviarRespostas(sock, respostas) {
+  const estadoGrupo = { fechadoPorMim: false };
+  const chatId = respostas[0]?.chatId;
+  try {
+    for (const r of respostas) {
+      if (r.grupo) { await mudarGrupo(sock, r.chatId, r.grupo, estadoGrupo); continue; }
+      let res;
+      if (r.video) {
+        const buffer = fs.readFileSync(r.video.arquivo);
+        res = await sock.sendMessage(r.chatId, { video: buffer, caption: r.text, mentions: r.mentions, mimetype: 'video/mp4' });
+        await new Promise((ok) => setTimeout(ok, 1500)); // um de cada vez, sem atropelar
+      } else {
+        res = await sock.sendMessage(r.chatId, { text: r.text, mentions: r.mentions });
+      }
+      lembrarEnviado(res);
+      if (r.onSent) { r.onSent(res?.key?.id); store.salvar(); }
+    }
+  } finally {
+    // se deu erro no meio do caminho, não deixa o grupo fechado
+    if (estadoGrupo.fechadoPorMim && chatId) await mudarGrupo(sock, chatId, 'abrir', estadoGrupo);
   }
 }
 

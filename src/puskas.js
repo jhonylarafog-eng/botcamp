@@ -170,7 +170,7 @@ class Puskas {
 
   // ---------- abrir a votação ----------
   iniciar(ctx) {
-    const { msg, say, sayVideo } = ctx;
+    const { msg, say, sayVideo, grupo } = ctx;
     if (!this.exigeAdmin(ctx)) return;
     if (this.rodadaAberta(msg.chatId)) return say('Já tem uma votação do Puskas aberta. Use /encerrar puskas pra apurar (ou /puskas cancelar).');
     this.limpar();
@@ -188,8 +188,10 @@ class Puskas {
     this.rodadas[id] = rodada;
     gols.forEach((g) => { g.rodadaId = id; });
 
+    grupo('fechar'); // ninguém atrapalha enquanto os gols passam
     say(
       `🎯 *PRÊMIO PUSKAS — ${this.dataBonita(rodada.dia)}*\n\n` +
+      `🔒 Vou *fechar o grupo* enquanto mando os gols, pra ninguém atrapalhar. Depois eu abro de novo pra vocês votarem.\n\n` +
       `Como funciona:\n` +
       `⚽ Vou mandar ${plural(gols.length, 'gol', 'gols')} de hoje, um de cada vez.\n` +
       `🗳️ A votação é por *reação*: reaja no gol que você achou o mais bonito.\n` +
@@ -205,6 +207,7 @@ class Puskas {
         (waId) => { if (waId) rodada.porMsg[waId] = g.id; }
       );
     });
+    grupo('abrir'); // reabre pra todo mundo poder reagir
     say(
       `🗳️ *Votação aberta!* Reaja no gol que você achou o mais bonito.\n` +
       `(Se a reação não funcionar: /puskas votar 2)\n\n` +
