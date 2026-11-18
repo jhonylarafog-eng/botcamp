@@ -68,7 +68,11 @@ assert.match(diz(U(1), '/iniciar puskas').t, /Só admin/);
 let { r } = diz(ADMIN, '/iniciar puskas', {}, true);
 const videos = r.filter((x) => x.video);
 assert.strictEqual(videos.length, 10);
-assert.match(videos[0].text, /GOL 1\* de 10/);
+assert.match(videos[0].text, /GOL 1\* de 10 — gol do @\d+/);
+assert.match(videos[0].text, /Reaja nesse gol se você achou ele o mais bonito/);
+assert.strictEqual(videos[0].mentions.length, 1); // marca o autor
+assert.match(r[0].text, /Como funciona[\s\S]*reação[\s\S]*voto \*muda\*[\s\S]*mais bonito de verdade/);
+assert.ok(r.indexOf(r[0]) < r.indexOf(videos[0]), 'a explicação vem antes dos vídeos');
 assert.match(videos[9].text, /GOL 10\* de 10/);
 assert.match(r[r.length - 1].text, /Votação aberta/);
 assert.ok(r.indexOf(videos[0]) < r.indexOf(r[r.length - 1]));

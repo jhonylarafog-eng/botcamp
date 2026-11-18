@@ -1,5 +1,5 @@
 // Prêmio Puskas: o jogador manda o vídeo do gol com /puskas (máx. 10 por dia).
-// O admin abre a votação com /iniciar puskas: o bot reenvia os gols um a um e as pessoas
+// O admin abre a votação com /iniciar puskas: o bot explica, reenvia os gols um a um (marcando o autor) e as pessoas
 // votam REAGINDO ao vídeo do gol que acharam mais bonito (1 voto por pessoa; trocar a reação muda o voto).
 // /encerrar puskas apura e anuncia o Gol Puskas do dia.
 //
@@ -190,20 +190,24 @@ class Puskas {
 
     say(
       `🎯 *PRÊMIO PUSKAS — ${this.dataBonita(rodada.dia)}*\n\n` +
-      `${plural(gols.length, 'gol concorre', 'gols concorrem')} hoje. Vou mandar um de cada vez. 👀\n` +
-      `Quando acabar, é só *reagir* no vídeo do gol que você achou mais bonito!`
+      `Como funciona:\n` +
+      `⚽ Vou mandar ${plural(gols.length, 'gol', 'gols')} de hoje, um de cada vez.\n` +
+      `🗳️ A votação é por *reação*: reaja no gol que você achou o mais bonito.\n` +
+      `🔁 Se você reagir em outro gol, o seu voto *muda* — então reaja só no gol certo, o que você achou mais bonito de verdade!\n` +
+      `🚫 Não vale votar no próprio gol.\n\n` +
+      `Já vou começar... 👀`
     );
     gols.forEach((g, i) => {
-      sayVideo(this.caminho(g.arquivo), `⚽ *GOL ${i + 1}* de ${gols.length}\n👆 Reaja a este vídeo pra votar nele`, [], (waId) => {
-        if (waId) rodada.porMsg[waId] = g.id;
-      });
+      sayVideo(
+        this.caminho(g.arquivo),
+        `⚽ *GOL ${i + 1}* de ${gols.length} — gol do ${tag(g.autor)}\n👆 Reaja nesse gol se você achou ele o mais bonito`,
+        [g.autor],
+        (waId) => { if (waId) rodada.porMsg[waId] = g.id; }
+      );
     });
     say(
-      `🗳️ *Votação aberta!*\n\n` +
-      `• *Reaja* (qualquer emoji) no vídeo do gol que achou o mais bonito\n` +
-      `• 1 voto por pessoa: reagir em outro gol muda o seu voto\n` +
-      `• Não vale votar no próprio gol\n` +
-      `• Se a reação não funcionar: /puskas votar 2\n\n` +
+      `🗳️ *Votação aberta!* Reaja no gol que você achou o mais bonito.\n` +
+      `(Se a reação não funcionar: /puskas votar 2)\n\n` +
       `O admin encerra com /encerrar puskas`
     );
   }
