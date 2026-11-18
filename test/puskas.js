@@ -118,7 +118,8 @@ assert.match(r.find((x) => x.video).text, /GOL PUSKAS DO DIA/);
 const gols = Object.values(store.data.puskas.gols);
 assert.strictEqual(gols.filter((g) => g.arquivo).length, 1);
 assert.match(diz(ADMIN, '/encerrar puskas', {}, true).t, /Não tem votação/);
-assert.match(diz(U(1), '/puskas hall').t, /Hall do Puskas[\s\S]*17\/11/);
+assert.match(t, /agora tem 1 Puskas/);
+assert.match(diz(U(1), '/puskas hall').t, /Hall do Puskas[\s\S]*Quem já ganhou\*\n1\. @5511900000006 — 1 Puskas[\s\S]*17\/11/);
 
 // ---------- no dia seguinte: empate, cancelar, poucos gols ----------
 agora = new Date('2026-11-18T10:00:00-03:00').getTime();
@@ -138,6 +139,27 @@ gol(U(31)); gol(U(32));
 assert.match(diz(ADMIN, '/puskas cancelar', {}, true).t, /cancelada/);
 assert.strictEqual(diz(ADMIN, '/iniciar puskas', {}, true).r.filter((x) => x.video).length, 2);
 diz(ADMIN, '/puskas cancelar', {}, true);
+
+// ---------- ranking de campeões: quem ganha de novo soma ----------
+agora += 86_400_000; // dia 3
+gol(U(21)); gol(U(40));
+({ r } = diz(ADMIN, '/iniciar puskas', {}, true));
+r.filter((x) => x.video).forEach((v, i) => v.onSent(`B3-${i + 1}`));
+const primeiro = Object.values(store.data.puskas.rodadas).find((x) => x.status === 'aberta');
+const autor1 = store.data.puskas.gols[primeiro.gols[0]].autor;
+reage(U(80), 'B3-1');
+({ t } = diz(ADMIN, '/encerrar puskas', {}, true));
+assert.strictEqual(autor1, U(21));
+assert.match(t, /@5511900000021 agora tem 2 Puskas/);
+t = diz(U(1), '/puskas ranking').t;
+assert.match(t, /1\. @5511900000021 — 2 Puskas/);
+assert.match(t, /2\. @5511900000006 — 1 Puskas/);
+assert.match(t, /@5511900000022 — 1 Puskas/);
+// o ranking fica salvo no arquivo de dados (JSON), não só na memória
+const salvo = JSON.parse(JSON.stringify(store.data));
+const bot2 = new Bot(Object.assign(new Store(null), { data: salvo }), { dataDir: dir, agora: () => agora });
+const h2 = bot2.handle({ chatId: CHAT, senderId: U(1), senderName: 'x', text: '/puskas hall', isAdmin: false });
+assert.match(h2[0].text, /@5511900000021 — 2 Puskas/);
 
 // ---------- limpeza de vídeos antigos ----------
 const velho = novoVideo();

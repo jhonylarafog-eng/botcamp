@@ -91,7 +91,7 @@ class Puskas {
       case 'iniciar': case 'abrir': return this.iniciar(ctx);
       case 'encerrar': case 'apurar': return this.encerrar(ctx);
       case 'cancelar': return this.cancelar(ctx);
-      case 'hall': return this.hall(ctx);
+      case 'hall': case 'ranking': case 'ganhadores': case 'vencedores': return this.hall(ctx);
       case 'votar': case 'voto': return this.votarTexto(ctx, resto);
       default: return say('Não entendi. Mande o *vídeo do gol* com a legenda */puskas* (ou responda ao vídeo com /puskas).');
     }
@@ -107,7 +107,7 @@ class Puskas {
       `/puskas remover N — tira um gol (o autor ou admin)\n` +
       `(admin) /iniciar puskas — mostra os gols e abre a votação\n` +
       `(admin) /encerrar puskas — apura o Gol Puskas do dia\n` +
-      `/puskas hall — vencedores anteriores`
+      `/puskas hall — quem já ganhou Puskas`
     );
   }
 
@@ -258,6 +258,16 @@ class Puskas {
     return contagem;
   }
 
+  // quantos Puskas cada pessoa já ganhou neste grupo: Map autor -> n (em ordem de quem ganhou primeiro)
+  titulos(chatId) {
+    const m = new Map();
+    const rs = Object.values(this.rodadas)
+      .filter((r) => r.chatId === chatId && r.status === 'encerrada')
+      .sort((a, b) => a.encerradaEm - b.encerradaEm);
+    for (const r of rs) for (const id of r.vencedores) { const a = this.gols[id].autor; m.set(a, (m.get(a) || 0) + 1); }
+    return m;
+  }
+
   // ---------- apuração ----------
   encerrar(ctx) {
     const { msg, say, sayVideo } = ctx;
@@ -284,7 +294,15 @@ class Puskas {
     });
     const cab = vencedores.length > 1 ? `🤝 *EMPATE NO PUSKAS!* (${this.dataBonita(rodada.dia)})` : `🏆 *GOL PUSKAS DO DIA!* (${this.dataBonita(rodada.dia)})`;
     const mencoes = [...new Set(rodada.gols.map((id) => this.gols[id].autor))];
-    say(`${cab}\n\n${linhas.join('\n')}\n\n👥 ${plural(votantes, 'pessoa votou', 'pessoas votaram')}.`, mencoes);
+    const totais = this.titulos(msg.chatId); // já inclui esta rodada
+    const acumulado = vencedores.map((id) => {
+      const a = this.gols[id].autor;
+      return `🏅 ${tag(a)} agora tem ${plural(totais.get(a), 'Puskas', 'Puskas')}`;
+    });
+    say(
+      `${cab}\n\n${linhas.join('\n')}\n\n👥 ${plural(votantes, 'pessoa votou', 'pessoas votaram')}.\n\n${acumulado.join('\n')}`,
+      mencoes
+    );
 
     for (const id of vencedores) {
       const g = this.gols[id];
@@ -306,23 +324,22 @@ class Puskas {
     say('🛑 Votação do Puskas cancelada. Os gols continuam na lista; use /iniciar puskas pra abrir de novo.');
   }
 
+  // lista de quem já ganhou Puskas (todos, com a contagem) + últimos vencedores
   hall(ctx) {
     const { msg, say } = ctx;
     const rs = Object.values(this.rodadas)
       .filter((r) => r.chatId === msg.chatId && r.status === 'encerrada')
       .sort((a, b) => a.encerradaEm - b.encerradaEm);
     if (!rs.length) return say('Ainda não teve nenhum Gol Puskas do dia. Use /iniciar puskas (admin) pra abrir a votação.');
-    const titulos = new Map();
-    const linhas = rs.slice(-10).reverse().map((r) => {
+    const titulos = [...this.titulos(msg.chatId).entries()].sort((a, b) => b[1] - a[1]); // empate: quem ganhou primeiro fica na frente
+    const lista = titulos.map(([a, n], i) => `${i + 1}. ${tag(a)} — ${plural(n, 'Puskas', 'Puskas')}`);
+    const ultimos = rs.slice(-5).reverse().map((r) => {
       const nomes = r.vencedores.map((id) => tag(this.gols[id].autor)).join(' e ');
       return `${this.dataBonita(r.dia)} — ${nomes}`;
     });
-    for (const r of rs) for (const id of r.vencedores) { const a = this.gols[id].autor; titulos.set(a, (titulos.get(a) || 0) + 1); }
-    const top = [...titulos.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
-      .map(([a, n], i) => `${i + 1}. ${tag(a)} — ${plural(n, 'Puskas', 'Puskas')}`);
     say(
-      `🏆 *Hall do Puskas*\n\n*Últimos vencedores*\n${linhas.join('\n')}\n\n*Quem mais ganhou*\n${top.join('\n')}`,
-      [...titulos.keys()]
+      `🏆 *Hall do Puskas*\n\n*Quem já ganhou*\n${lista.join('\n')}\n\n*Últimos vencedores*\n${ultimos.join('\n')}`,
+      titulos.map(([a]) => a)
     );
   }
 }
