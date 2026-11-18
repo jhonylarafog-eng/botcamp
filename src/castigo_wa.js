@@ -15,6 +15,7 @@ function criarVigia({ bot, store, lembrarEnviado = () => {} }) {
       if (!p) return await falhar('⚠️ Não achei essa pessoa no grupo.');
       const meu = sock.user?.id ? usuarioDe(sock.user.id) : null;
       if (meu && idsDe(p).some((i) => usuarioDe(i) === meu)) return await falhar('😅 Eu não posso me castigar.');
+      if (bot.castigo.ehProtegido([d.alvo, ...idsDe(p)])) return await falhar('🛡️ Essa pessoa é protegida e não pode ser castigada.');
       if (p.admin === 'superadmin') return await falhar('⚠️ Essa pessoa é a dona (criadora) do grupo e o WhatsApp não deixa rebaixar.');
       bot.castigo.guardarAliases(d.castigoId, [d.alvo, ...idsDe(p)]);
       store.salvar();

@@ -12,7 +12,8 @@ const DONO = '5511900000000@s.whatsapp.net';
 
 let agora = new Date('2026-11-18T19:00:00-03:00').getTime();
 const store = new Store(null);
-const bot = new Bot(store, { agora: () => agora });
+const PROTEGIDO = '5511933330000@s.whatsapp.net';
+const bot = new Bot(store, { agora: () => agora, protegidos: ['5511933330000'] });
 const vigia = criarVigia({ bot, store });
 
 function grupoFalso(participantes) {
@@ -89,7 +90,8 @@ async function diz(g, quem, texto, mentions = [], isAdmin = false) {
   promover(g2, L);
   await vigia.varrerCastigos(g2, CHAT);
   assert.strictEqual(g2.participants.find((p) => p.id === L).admin, null);
-  await diz(g2, ADM, '/perdoar @5511922220000', [Y], true);
+  assert.ok(bot.castigo.daPessoa(CHAT, [Y]));
+  bot.castigo.remover(bot.castigo.daPessoa(CHAT, [Y]).id); // (só no teste: simula o fim do prazo)
 
   // ---------- dona do grupo, quem não existe, bot sem poder ----------
   const antes = Object.keys(store.data.castigos).length;
@@ -101,19 +103,33 @@ async function diz(g, quem, texto, mentions = [], isAdmin = false) {
   g.falhaDemote = false;
   assert.strictEqual(Object.keys(store.data.castigos).length, antes, 'castigo que não deu certo não fica registrado');
 
-  // ---------- perdoar ----------
-  assert.match(await diz(g, ADM, '/perdoar @5511922220000', [Y], true), /não está de castigo/);
-  assert.match(await diz(g, Y, '/perdoar @5511911110000', [X]), /Só admin/);
-  assert.match(await diz(g, ADM, '/perdoar @5511911110000', [X], true), /foi perdoado/);
-  promover(g, X);
-  await vigia.varrerCastigos(g, CHAT);
-  assert.strictEqual(g.participants.find((p) => p.id === X).admin, 'admin', 'perdoado pode ser admin');
-  assert.match(await diz(g, Y, '/castigos'), /Ninguém está de castigo/);
+  // ---------- não existe perdoar, e castigar de novo não renova o prazo ----------
+  const antesPerdoar = Object.keys(store.data.castigos).length;
+  const rPerdoar = bot.handle({ chatId: CHAT, senderId: ADM, senderName: 'x', text: '/perdoar @5511911110000', isAdmin: true, mentions: [X] });
+  assert.deepStrictEqual(rPerdoar, [], '/perdoar não existe');
+  assert.strictEqual(Object.keys(store.data.castigos).length, antesPerdoar);
+  const ateAntes = bot.castigo.daPessoa(CHAT, [X]).ate;
+  agora += 3_600_000; // 1h depois
+  t = await diz(g, ADM, '/castigo @5511911110000', [X], true);
+  assert.match(t, /já está de castigo: faltam 23h00/);
+  assert.strictEqual(bot.castigo.daPessoa(CHAT, [X]).ate, ateAntes, 'prazo não pode ser renovado');
+  assert.match(await diz(g, Y, '/castigos'), /faltam 23h00/);
+
+  // ---------- número blindado ----------
+  const g3 = grupoFalso([{ id: DONO, admin: 'superadmin' }, { id: ADM, admin: 'admin' }, { id: PROTEGIDO, admin: 'admin' }]);
+  assert.match(await diz(g3, ADM, '/castigo @5511933330000', [PROTEGIDO], true), /é protegido e não pode ser castigado/);
+  assert.strictEqual(g3.chamadas.length, 0);
+  assert.strictEqual(g3.participants.find((p) => p.id === PROTEGIDO).admin, 'admin');
+  // marcado por um id que não é o número (LID): o conector reconhece pelo cadastro do grupo
+  const LP = '55512345678901@lid';
+  const g4 = grupoFalso([{ id: DONO, admin: 'superadmin' }, { id: ADM, admin: 'admin' }, { id: LP, jid: PROTEGIDO, admin: 'admin' }]);
+  assert.match(await diz(g4, ADM, '/castigo @55512345678901', [LP], true), /protegida e não pode ser castigada/);
+  assert.strictEqual(g4.chamadas.length, 0);
+  assert.strictEqual(g4.participants.find((p) => p.id === LP).admin, 'admin');
+  assert.strictEqual(bot.castigo.daPessoa(CHAT, [PROTEGIDO]), null);
 
   // ---------- 24 horas depois o castigo acaba sozinho ----------
-  g.participants.find((p) => p.id === X).admin = null;
-  await diz(g, ADM, '/castigo @5511911110000', [X], true);
-  agora += 23 * 3_600_000;
+  agora += 22 * 3_600_000; // já passou 1h + 22h = 23h desde o início
   promover(g, X);
   await vigia.varrerCastigos(g, CHAT);
   assert.strictEqual(g.participants.find((p) => p.id === X).admin, null, 'com 23h ainda vale');

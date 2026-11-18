@@ -66,8 +66,7 @@ Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 por dia)
 /puskas lista · /puskas hall
 
 *Castigo (admin)*
-(admin) /castigo @fulano — tira o admin por 24h e ninguém consegue promover de novo
-(admin) /perdoar @fulano — encerra o castigo antes da hora
+(admin) /castigo @fulano — tira o admin por 24h e ninguém consegue promover de novo (não dá pra desfazer)
 /castigos — quem está de castigo`;
 
 const ETAPAS = { final: 2, semi: 4, quartas: 8, oitavas: 16 };
@@ -75,12 +74,12 @@ const norma = (s) => norm(s).replace(/ /g, '');
 const tag = (id) => `@${id.split('@')[0]}`;
 
 class Bot {
-  constructor(store, { prefix = '/', rng = Math.random, dataDir = null, agora = () => Date.now() } = {}) {
+  constructor(store, { prefix = '/', rng = Math.random, dataDir = null, agora = () => Date.now(), protegidos = [] } = {}) {
     this.store = store;
     this.prefix = prefix;
     this.rng = rng;
     this.puskas = new Puskas(store, { prefix, dataDir, agora });
-    this.castigo = new Castigo(store, { agora });
+    this.castigo = new Castigo(store, { agora, protegidos });
     this.contagem = new Contagem(store, { prefix });
     this.votacao = new Votacao(store, this.contagem);
   }
@@ -148,7 +147,6 @@ class Bot {
       case 'iniciarpuskas': return this.puskas.iniciar(ctx);
       case 'puskas': return this.puskas.comando(ctx, args);
       case 'castigo': case 'rebaixar': case 'tiraradm': case 'tiraradmin': return this.castigo.aplicar(ctx, args);
-      case 'perdoar': return this.castigo.perdoar(ctx, args);
       case 'castigos': return this.castigo.lista(ctx);
       case 'votarpuskas': return this.puskas.votarTexto(ctx, args);
       case 'champions': case 'libertadores': case 'brasileirao':

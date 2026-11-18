@@ -6,6 +6,7 @@
 //   DATA_DIR    pasta onde ficam login e dados (use um volume!). Padrão: ./dados
 //   PORT        porta da página web. Padrão: 3000
 //   PREFIX      prefixo dos comandos. Padrão: /
+//   PROTEGIDOS  números blindados do /castigo, separados por vírgula. Ex.: 5511999998888,5511988887777
 
 const fs = require('fs');
 const path = require('path');
@@ -33,7 +34,8 @@ if (!ADMIN_KEY) {
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const store = new Store(path.join(DATA_DIR, 'campeonatos.json'));
-const bot = new Bot(store, { prefix: PREFIX, dataDir: DATA_DIR });
+const PROTEGIDOS = (process.env.PROTEGIDOS || '').split(/[,\s]+/).map((n) => n.replace(/\D/g, '')).filter(Boolean);
+const bot = new Bot(store, { prefix: PREFIX, dataDir: DATA_DIR, protegidos: PROTEGIDOS });
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
 const estado = { conectado: false, codigo: null, codigoEm: 0, qr: null, aviso: 'Iniciando...' };
