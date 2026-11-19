@@ -213,7 +213,9 @@ const vendas = criarVendas({
   lembrarEnviado,
   gerarId: () => (baileys.generateMessageIDV2 || baileys.generateMessageID)(sockAtual?.user?.id),
   baixar: (m, sock) => downloadMediaMessage(m, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }),
+  obterSock: () => (estado.conectado ? sockAtual : null),
 });
+vendas.iniciarLembretes();
 
 const vigia = criarVigia({ bot, store, lembrarEnviado });
 const { aplicarCastigo, varrerCastigos, varrerTodos } = vigia;

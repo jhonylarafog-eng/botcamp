@@ -20,6 +20,11 @@
 //   VENDAS_ESPERA_MS        quanto esperar por mais mensagens antes de responder (padrão 7000)
 //   VENDAS_LIMITE_DIA       máximo de respostas por dia no total (padrão 400)
 //   VENDAS_LIMITE_CHAT_DIA  máximo de respostas por dia por cliente (padrão 80)
+//   VENDAS_LEMBRETES=nao    desliga os lembretes pra quem sumiu (padrão: ligados)
+//   VENDAS_LEMBRETE1_HORAS  quanto esperar antes do 1º lembrete (padrão 3)
+//   VENDAS_LEMBRETE2_HORAS  quanto esperar depois do 1º pro 2º lembrete (padrão 24)
+//   VENDAS_LEMBRETE_MAX     máximo de lembretes por cliente (padrão 2)
+//   VENDAS_LEMBRETES_DIA    máximo de lembretes por dia no total (padrão 30)
 
 const fs = require('fs');
 const path = require('path');
@@ -32,6 +37,24 @@ const MAX_HISTORICO = 40;
 const MAX_IMAGEM_BYTES = 5 * 1024 * 1024;
 const MAX_AUDIO_SEG = 300;
 const TAGS = /\[\[(PAGAMENTO|HUMANO)(?:\|([\s\S]*?))?\]\]/g;
+
+const PARAR = /\b(n[aã]o quero|n[aã]o tenho interesse|sem interesse|n[aã]o preciso|pare\b|para de (me )?(mandar|enviar|chamar)|me (tira|tire|remove|remova)|n[aã]o me (chame|mande|envie)|desisti|cancela)/i;
+
+// Textos dos lembretes (só pra quem já conversou e sumiu). {n} = primeiro nome, quando dá pra usar.
+const LEMBRETES = [
+  [
+    'Opa{, n}! Seu pedido tá te aguardando por aqui 😊 Vamos dar continuidade?',
+    '{N}, tudo certo? Ainda dá pra fazer o seu pedido. Se quiser seguir, é só me falar que eu já organizo tudo por aqui!',
+  ],
+  [
+    '{N}, passando só pra avisar que o seu pedido continua de pé por aqui. Se ainda tiver interesse, é só me chamar, tá? Se não for o momento, sem problema!',
+    'Oi{ n}! Ainda consigo fazer o seu pedido. Se quiser seguir, me chama aqui. Se não for agora, tudo bem, qualquer coisa é só falar!',
+  ],
+];
+const primeiroNome = (nome) => {
+  const p = String(nome || '').trim().split(/\s+/)[0];
+  return /^[\p{L}]{2,15}$/u.test(p) ? p : '';
+};
 
 const dormirPadrao = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const soDigitos = (x) => String(x || '').replace(/\D/g, '');
@@ -103,6 +126,12 @@ function criarVendas(opcoes = {}) {
   const limiteDia = Number(env.VENDAS_LIMITE_DIA || 400);
   const limiteChatDia = Number(env.VENDAS_LIMITE_CHAT_DIA || 80);
   const idadeMaxMs = Number(env.VENDAS_IDADE_MAX_MIN || 240) * 60_000;
+  const lembretesOn = String(env.VENDAS_LEMBRETES || 'sim').toLowerCase() !== 'nao';
+  const lem1Ms = Number(env.VENDAS_LEMBRETE1_HORAS || 3) * 3_600_000;
+  const lem2Ms = Number(env.VENDAS_LEMBRETE2_HORAS || 24) * 3_600_000;
+  const lemMax = Number(env.VENDAS_LEMBRETE_MAX || 2);
+  const lemDia = Number(env.VENDAS_LEMBRETES_DIA || 30);
+  const lemIdadeMaxMs = 4 * 24 * 3_600_000;
   const ignorar = new Set((env.VENDAS_IGNORAR || '').split(/[,\s]+/).map(soDigitos).filter(Boolean));
 
   const arquivo = path.join(dataDir, 'vendas.json');
@@ -141,6 +170,7 @@ function criarVendas(opcoes = {}) {
       estado.dia = d;
       estado.totalDia = 0;
       estado.alertaLimite = false;
+      estado.lembretesDia = 0;
       for (const c of Object.values(estado.chats)) { c.respostasDia = 0; }
     }
   }
@@ -376,6 +406,8 @@ function criarVendas(opcoes = {}) {
 
     const chat = chatDe(jid);
     if (m.pushName) chat.nome = m.pushName;
+    chat.lembretes = 0; chat.ultimoLembrete = 0; // o cliente voltou a falar: zera a contagem
+    if (c.tipo === 'texto') chat.parar = PARAR.test(c.texto);
     if (chat.pausado) return;
 
     const lista = pendentes.get(jid) || [];
@@ -421,6 +453,7 @@ function criarVendas(opcoes = {}) {
           try { t = await transcrever(await baixar(m, sock)); } catch (e) { log.error('[vendas] falha ao baixar áudio:', e.message); }
         }
         linha = t ? `[áudio do cliente] ${t}` : '[áudio do cliente que não foi possível ouvir]';
+        if (t) chat.parar = PARAR.test(t);
       } else if (c.tipo === 'imagem') {
         linha = `[comprovante/imagem do cliente]${c.texto ? ' ' + c.texto : ''}`;
         try {
@@ -472,7 +505,11 @@ function criarVendas(opcoes = {}) {
     salvar();
 
     if (texto) {
-      try { await enviar(sock, jid, texto); } catch (e) { log.error('[vendas] falha ao enviar:', e.message); }
+      try {
+        await enviar(sock, jid, texto);
+        chat.ultimaRespostaBot = agora().getTime();
+        salvar();
+      } catch (e) { log.error('[vendas] falha ao enviar:', e.message); }
     }
 
     for (const a of acoes) {
@@ -488,7 +525,76 @@ function criarVendas(opcoes = {}) {
     }
   }
 
-  return { ativo, provedor, ehPrivado, receber, salvarAgora, _estado: () => estado };
+  // ---------- lembretes pra quem sumiu ----------
+  // Só pra quem JÁ conversou com o atendente, não fechou, não foi passado pro dono e não pediu pra parar.
+  // No máximo 2 lembretes por pessoa, só entre 9h e 20h (Brasília), poucos por vez.
+  const horaSP = () => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hourCycle: 'h23' }).format(agora()));
+
+  function elegivelLembrete(jid, chat) {
+    if (!ehPrivado(jid) || chat.pausado || chat.parar) return false;
+    if (jid.endsWith('@s.whatsapp.net') && ignorar.has(soDigitos(jid.split('@')[0]))) return false;
+    if (pendentes.has(jid) || timers.has(jid)) return false;
+    const h = chat.historico || [];
+    if (!h.length || h[h.length - 1].role !== 'assistant' || !h.some((x) => x.role === 'user')) return false;
+    const n = chat.lembretes || 0;
+    if (n >= lemMax || !chat.ultimaRespostaBot) return false;
+    const t = agora().getTime();
+    if (t - chat.ultimaRespostaBot > lemIdadeMaxMs) return false;
+    return n === 0 ? t - chat.ultimaRespostaBot >= lem1Ms : t - (chat.ultimoLembrete || 0) >= lem2Ms;
+  }
+
+  function textoLembrete(jid, chat, n) {
+    const variantes = LEMBRETES[Math.min(n, LEMBRETES.length) - 1];
+    const base = variantes[soDigitos(jid).length % variantes.length];
+    const nome = primeiroNome(chat.nome);
+    return base
+      .replace('{, n}', nome ? `, ${nome}` : '')
+      .replace('{ n}', nome ? ` ${nome}` : '')
+      .replace('{N}', nome || 'Oi');
+  }
+
+  // Chamado a cada 10 minutos (e nos testes). Devolve quantos lembretes saíram.
+  async function verificarLembretes() {
+    const sock = opcoes.obterSock && opcoes.obterSock();
+    if (!ativo || !lembretesOn || !sock) return 0;
+    const h = horaSP();
+    if (h < 9 || h >= 20) return 0;
+    virouODia();
+    let enviados = 0;
+    for (const [jid, chat] of Object.entries(estado.chats)) {
+      if (enviados >= 5 || (estado.lembretesDia || 0) >= lemDia) break;
+      if (!elegivelLembrete(jid, chat)) continue;
+      let saiu = false;
+      await naFila(jid, async () => {
+        if (!elegivelLembrete(jid, chat)) return;
+        const n = (chat.lembretes || 0) + 1;
+        const texto = textoLembrete(jid, chat, n);
+        await enviar(sock, jid, texto);
+        saiu = true;
+        chat.lembretes = n;
+        chat.ultimoLembrete = agora().getTime();
+        chat.ultimaRespostaBot = agora().getTime();
+        const ult = chat.historico[chat.historico.length - 1];
+        ult.content = `${ult.content}\n\n[lembrete automático enviado: ${texto}]`;
+        estado.lembretesDia = (estado.lembretesDia || 0) + 1;
+        salvar();
+      });
+      if (saiu) {
+        enviados += 1;
+        await dormir(15_000 + Math.floor(Math.random() * 25_000)); // não manda tudo de uma vez
+      }
+    }
+    return enviados;
+  }
+
+  function iniciarLembretes() {
+    if (!ativo || !lembretesOn) return null;
+    const t = setInterval(() => verificarLembretes().catch((e) => log.error('[vendas] lembretes:', e.message)), 10 * 60_000);
+    if (t.unref) t.unref();
+    return t;
+  }
+
+  return { ativo, provedor, ehPrivado, receber, salvarAgora, verificarLembretes, iniciarLembretes, _estado: () => estado };
 }
 
 module.exports = { criarVendas, classificar, tirarMarcacoes, dividir };

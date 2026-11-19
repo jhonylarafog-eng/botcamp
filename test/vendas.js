@@ -14,7 +14,8 @@ async function teste(nome, fn) {
 const esperar = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- ambiente simulado ----------
-function montar({ respostas = [], env = {}, falhaClaude = false } = {}) {
+function montar({ respostas = [], env = {}, falhaClaude = false, inicio = null } = {}) {
+  const relogio = { t: inicio ? new Date(inicio).getTime() : null };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vendas-'));
   const chamadas = { claude: [], groq: [], gemini: [], telegram: [] };
   const fila = respostas.slice();
@@ -52,11 +53,14 @@ function montar({ respostas = [], env = {}, falhaClaude = false } = {}) {
   let n = 0;
   const v = criarVendas({
     dataDir: dir, fetch, dormir: async () => {}, log: silencio,
+    agora: () => new Date(relogio.t !== null ? relogio.t : Date.now()),
+    obterSock: () => sock,
     gerarId: () => 'ID' + (++n),
     baixar: async () => Buffer.from('arquivo-falso'),
     env: { VENDAS_ATIVO: 'sim', ANTHROPIC_API_KEY: 'k', GROQ_API_KEY: 'g', TELEGRAM_BOT_TOKEN: 't', TELEGRAM_CHAT_ID: '1', PIX_CHAVE: 'pix@exemplo.com', VENDAS_ESPERA_MS: '0', ...env },
   });
-  return { v, sock, chamadas, enviadas, dir };
+  const horas = (h) => { relogio.t += h * 3_600_000; };
+  return { v, sock, chamadas, enviadas, dir, horas };
 }
 const JID = '5511999990000@s.whatsapp.net';
 const msgTexto = (texto, extra = {}) => ({ key: { remoteJid: JID, id: 'M' + Math.random(), fromMe: false }, message: { conversation: texto }, pushName: 'Cliente', ...extra });
@@ -322,6 +326,83 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     a.v.salvarAgora();
     const salvo = JSON.parse(fs.readFileSync(path.join(a.dir, 'vendas.json'), 'utf8'));
     assert.strictEqual(salvo.chats[JID].historico.length, 2);
+  });
+
+  // ---------- lembretes pra quem sumiu ----------
+  const INICIO = '2026-11-19T13:00:00Z'; // 10h em Brasília
+  const conversarEsumir = async (extra = {}) => {
+    const a = montar({ inicio: INICIO, respostas: ['opa! que tipo de vídeo você quer?'], ...extra });
+    await a.v.receber(a.sock, msgTexto('oi, quero um vídeo'));
+    await esperar();
+    a.enviadas.length = 0;
+    return a;
+  };
+  await teste('lembrete: antes de 3h não manda; depois de 3h manda 1', async () => {
+    const a = await conversarEsumir();
+    a.horas(2);
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
+    a.horas(1.5);
+    assert.strictEqual(await a.v.verificarLembretes(), 1);
+    assert.strictEqual(a.enviadas.length, 1);
+    assert.ok(/pedido/i.test(a.enviadas[0].texto));
+    assert.ok(a.enviadas[0].texto.includes('Cliente'));
+    assert.ok(a.v._estado().chats[JID].historico.at(-1).content.includes('[lembrete automático enviado'));
+  });
+  await teste('lembrete: no máximo 2 e o 2º só depois de 24h', async () => {
+    const a = await conversarEsumir();
+    a.horas(4); await a.v.verificarLembretes();
+    a.horas(5); assert.strictEqual(await a.v.verificarLembretes(), 0);
+    a.horas(20); assert.strictEqual(await a.v.verificarLembretes(), 1);
+    a.horas(30); assert.strictEqual(await a.v.verificarLembretes(), 0);
+    assert.strictEqual(a.enviadas.length, 2);
+    assert.notStrictEqual(a.enviadas[0].texto, a.enviadas[1].texto);
+  });
+  await teste('lembrete: fora do horário (9h–20h) espera a manhã seguinte', async () => {
+    const a = await conversarEsumir({ inicio: '2026-11-19T21:00:00Z' }); // 18h
+    a.horas(3); // 21h em Brasília
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
+    a.horas(12); // 9h do dia seguinte
+    assert.strictEqual(await a.v.verificarLembretes(), 1);
+  });
+  await teste('lembrete: não manda se o cliente disse que pagou ou precisa do dono (conversa pausada)', async () => {
+    const a = montar({ inicio: INICIO, respostas: ['Recebi, vou conferir!\n[[PAGAMENTO|resumo]]'] });
+    await a.v.receber(a.sock, msgTexto('paguei'));
+    await esperar();
+    a.horas(5);
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
+  });
+  await teste('lembrete: não manda se o dono assumiu a conversa', async () => {
+    const a = await conversarEsumir();
+    a.horas(0.01);
+    await a.v.receber(a.sock, msgDono('oi, é o dono'));
+    a.horas(5);
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
+  });
+  await teste('lembrete: não manda pra quem pediu pra parar', async () => {
+    const a = montar({ inicio: INICIO, respostas: ['tudo bem, qualquer coisa é só falar'] });
+    await a.v.receber(a.sock, msgTexto('não quero mais, obrigado'));
+    await esperar();
+    a.horas(5);
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
+  });
+  await teste('lembrete: se o cliente volta a falar, a contagem recomeça', async () => {
+    const a = await conversarEsumir({ respostas: ['opa!', 'beleza, me conta mais'] });
+    a.horas(4); await a.v.verificarLembretes();
+    await a.v.receber(a.sock, msgTexto('voltei, quero sim'));
+    await esperar();
+    assert.strictEqual(a.v._estado().chats[JID].lembretes, 0);
+    a.horas(4);
+    assert.strictEqual(await a.v.verificarLembretes(), 1);
+  });
+  await teste('lembrete: VENDAS_LEMBRETES=nao desliga', async () => {
+    const a = await conversarEsumir({ env: { VENDAS_LEMBRETES: 'nao' } });
+    a.horas(5);
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
+  });
+  await teste('lembrete: limite diário de lembretes', async () => {
+    const a = await conversarEsumir({ env: { VENDAS_LEMBRETES_DIA: '0' } });
+    a.horas(5);
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
   });
 
   console.log(`\n${ok} testes de vendas ok`);
