@@ -18,7 +18,7 @@ const AJUDA = `⚽ *Bot de Campeonato*
 /x1 /x2 /x3 — escolhe o modo
 /times 4 — muda a quantidade de clubes
 Depois é só *digitar o nome do clube* pra entrar nele
-/lista — times completos e times com vaga (durante as inscrições)
+/listatimes — times completos e times com vaga (durante as inscrições)
 /sair — sai do clube
 /comecar — (admin) começa só com os clubes completos
 /cancelar — (admin) cancela o campeonato
@@ -48,7 +48,7 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 (admin) ou corrija: /reg @fulano 2 gols 1 assistência
 (admin) /add @fulano 3 gols 2 assistências — soma direto, sem print (opcional: 4 jogos)
 (admin) /desfazer N — cancela um registro
-/lista — jogos, gols e assistências de todos (durante as inscrições use /lista geral)
+/listagols — jogos, gols e assistências de todos
 /artilheiros /assistentes /pendentes
 
 *Bola de Ouro (votação)*
@@ -185,10 +185,11 @@ class Bot {
       case 'ok': return this.contagem.ok(ctx);
       case 'add': case 'adicionar': return this.contagem.adicionar(ctx, args);
       case 'desfazer': return this.contagem.desfazer(ctx, args);
-      case 'lista':
-        // durante as inscrições mostra os times; "/lista geral" sempre mostra jogos/gols/assistências
-        if (camp && camp.status === 'inscricoes' && norma(args) !== 'geral') return this.listaTimes(ctx, camp);
-        return this.contagem.lista(ctx);
+      // /lista (sozinho) é ignorado de propósito: outro bot do grupo usa esse comando
+      case 'listagols': return this.contagem.lista(ctx);
+      case 'listatimes':
+        if (camp && camp.status === 'inscricoes') return this.listaTimes(ctx, camp);
+        return say('Não tem inscrições abertas agora. Use /iniciar ou /x3aleatorio (admin).');
       case 'artilheiros': return this.contagem.top(ctx, 'gols');
       case 'assistentes': return this.contagem.top(ctx, 'assist');
       case 'pendentes': return this.contagem.pendentes(ctx);
@@ -260,7 +261,7 @@ class Bot {
     return `${cheio ? '✅' : '⚪'} *${c.nome}* (${c.jogadores.length}/${camp.tamanho})\n${linhas.join('\n')}`;
   }
 
-  // /lista durante as inscrições: times completos e times com vagas
+  // /listatimes durante as inscrições: times completos e times com vagas
   listaTimes(ctx, camp) {
     const completos = camp.clubes.filter((c) => c.jogadores.length >= camp.tamanho);
     const livres = camp.clubes.filter((c) => c.jogadores.length < camp.tamanho);

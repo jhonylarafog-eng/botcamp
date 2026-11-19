@@ -95,7 +95,8 @@ assert.match(fala('caio', 'fiz 99 gols').saida, /parece errado/);
 assert.strictEqual(fala('caio', 'bora jogar mais tarde?').saida, '');
 
 // 12) consultas
-const lista = fala('ana', '/lista').saida;
+assert.strictEqual(fala('ana', '/lista').saida, '', '/lista é de outro bot: ignorar');
+const lista = fala('ana', '/listagols').saida;
 assert.match(lista, /Lista geral/);
 fala('ana', '/artilheiros');
 fala('ana', '/assistentes');
@@ -150,6 +151,6 @@ const idManual = Object.values(store.data.registros).find((r) => r.manual && r.j
 assert.match(fala('admin', `/desfazer ${idManual}`).saida, /Adição manual removida/);
 t = bot.contagem.totais(CHAT).get(ID.caio);
 assert.deepStrictEqual([t.jogos, t.gols, t.assist], [1, 3, 0]);
-fala('ana', '/lista');
+fala('ana', '/listagols');
 
 console.log('\n✅ CONTAGEM: TODOS OS TESTES PASSARAM');

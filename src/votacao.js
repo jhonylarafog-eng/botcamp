@@ -49,7 +49,7 @@ class Votacao {
       (a, b) => b.gols - a.gols || b.assist - a.assist || b.jogos - a.jogos
     );
     if (totais.length < 3) {
-      return say('Precisa de pelo menos 3 jogadores com partidas registradas pra abrir a votação (veja /lista).');
+      return say('Precisa de pelo menos 3 jogadores com partidas registradas pra abrir a votação (veja /listagols).');
     }
     const id = this.store.novoId('votacao');
     const qtd = Math.min(3, totais.length - 1);
@@ -117,7 +117,7 @@ class Votacao {
     const v = this.aberta(msg.chatId);
     if (!v) return say('Não tem votação aberta agora.');
     if (!v.candidatos.includes(msg.senderId)) {
-      return say('Só vota quem já tem partida registrada (veja /lista).');
+      return say('Só vota quem já tem partida registrada (veja /listagols).');
     }
     const r = this.lerEscolhas(msg, args, v);
     if (r.erro) return say(`⚠️ ${r.erro}`);

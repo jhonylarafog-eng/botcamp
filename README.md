@@ -25,11 +25,11 @@ Admins do grupo (ou quem iniciou o campeonato) podem usar `/comecar`, `/cancelar
 5. `/desfazer N` cancela o registro número N (o print pode ser registrado de novo).
 6. **Adição manual (admin, sem print):** `/add @fulano 3 gols 2 assistências` soma direto. Opcional `4 jogos` para contar partidas (por padrão soma 0 jogos). Vários jogadores: um por linha, separados por `;` ou só marcando um depois do outro. Dá pra desfazer com `/desfazer N`.
 
-Consultas: `/lista` (jogos, gols e assistências de todos), `/artilheiros`, `/assistentes`, `/pendentes`.
+Consultas: `/listagols` (jogos, gols e assistências de todos), `/artilheiros`, `/assistentes`, `/pendentes`.
 
 ## Bola de Ouro (votação)
 
-1. Um admin abre com `/bolaouro Temporada 1`. Os candidatos são os jogadores que têm partida registrada (`/lista`).
+1. Um admin abre com `/bolaouro Temporada 1`. Os candidatos são os jogadores que têm partida registrada (`/listagols`).
 2. Cada candidato vota nos **3 melhores**, em ordem: `/votar @1º @2º @3º` (ou pelos nomes: `/votar ana, bia, caio`). O 1º vale 5 pontos, o 2º vale 3 e o 3º vale 1. Não vale votar em si mesmo, e dá pra mudar o voto votando de novo.
 3. O voto é **aberto**: o bot mostra no grupo cada voto. `/votos` mostra quem votou, quem falta e a parcial.
 4. O admin encerra com `/encerrar`: o bot apura (desempate por mais 1º lugares, depois mais 2º), anuncia o campeão e guarda no `/hall`. `/cancelarvotacao` descarta.
@@ -88,7 +88,8 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 ## Times durante as inscrições
 
 - Quando alguém entra num clube, o bot mostra o time (nome + jogadores marcados + vagas livres).
-- `/lista` mostra todos os times: completos e com vagas. Para ver jogos/gols/assistências durante as inscrições, use `/lista geral`.
+- `/listatimes` mostra todos os times: completos e com vagas.
+- O bot **ignora `/lista`** de propósito, porque outro bot do grupo usa esse comando. Gols e assistências: `/listagols`.
 
 ## Prêmio Puskas (gol mais bonito do dia)
 
