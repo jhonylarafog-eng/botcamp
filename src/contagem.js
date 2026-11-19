@@ -216,7 +216,7 @@ class Contagem {
     const { msg, say } = ctx;
     const dup = Object.values(this.registros).find((r) => !r.desfeito && r.printId === printId);
     if (dup) {
-      return say(`Esse print já foi contado (#${dup.id}). Se precisar corrigir: /desfazer ${dup.id}`);
+      return say(`Esse print já foi contado (#${dup.id}).`);
     }
     const id = this.store.novoId('registro');
     this.registros[id] = {
@@ -274,14 +274,50 @@ class Contagem {
     say(`➕ *Adicionado manualmente*\n\n${linhas.join('\n')}`, itens.map((i) => i.jogador));
   }
 
-  desfazer(ctx, args) {
+  // /remover3gol @fulano, /remover5assistencia @fulano — tira gols ou assistências de alguém
+  removerStats(ctx, n, campo) {
     const { msg, say } = ctx;
     if (!this.exigeAdmin(ctx)) return;
-    const n = parseInt(args, 10);
-    const r = Number.isInteger(n) ? this.registros[n] : null;
-    if (!r || r.chatId !== msg.chatId || r.desfeito) return say('Use /desfazer N, com o número do registro (ex.: /desfazer 12).');
-    r.desfeito = true;
-    say(`↩️ Registro *#${r.id}* desfeito (${this.nome(r.jogador)}: ${txtGols(r.gols)}, ${txtAssist(r.assist)}). ${r.printId ? 'O print pode ser registrado de novo.' : 'Adição manual removida.'}`);
+    const nomeCampo = campo === 'gols' ? 'gol' : 'assistencia';
+    const mentions = msg.mentions || [];
+    if (mentions.length !== 1) return say(`Marque uma pessoa. Exemplo: /remover${n || 1}${nomeCampo} @fulano`);
+    if (!Number.isInteger(n) || n < 1 || n > MAXIMO_MANUAL) return say(`Use um número de 1 a ${MAXIMO_MANUAL}. Exemplo: /remover2${nomeCampo} @fulano`);
+    const jogador = mentions[0];
+    const atual = this.totais(msg.chatId).get(jogador) || { gols: 0, assist: 0 };
+    const tem = atual[campo];
+    const rotulo = campo === 'gols' ? txtGols : txtAssist;
+    if (tem < n) {
+      return say(`${tag(jogador)} só tem ${rotulo(tem)}. Não dá pra remover ${rotulo(n)}.`, [jogador]);
+    }
+    // ajuste negativo: o histórico fica guardado e o total diminui
+    const id = this.store.novoId('registro');
+    this.registros[id] = {
+      id, chatId: msg.chatId, jogador, gols: campo === 'gols' ? -n : 0, assist: campo === 'assist' ? -n : 0,
+      jogos: 0, manual: true, ajuste: true, printId: null, por: msg.senderId, em: this.agora(),
+    };
+    const t = this.totais(msg.chatId).get(jogador);
+    say(
+      `➖ *Removido:* ${rotulo(n)} de ${tag(jogador)}\n` +
+      `Agora: ${txtGols(t.gols)} · ${txtAssist(t.assist)} (participações totais: ${t.gols + t.assist})`,
+      [jogador]
+    );
+  }
+
+  // /resetartilharia — zera TODOS os gols e assistências do grupo (pede confirmação)
+  resetar(ctx, args) {
+    const { msg, say } = ctx;
+    if (!this.exigeAdmin(ctx)) return;
+    const ativos = this.ativos(msg.chatId);
+    const pessoas = new Set(ativos.map((r) => r.jogador)).size;
+    if (norm(args).replace(/ /g, '') !== 'confirmar') {
+      return say(
+        `⚠️ *Resetar a artilharia?*\nIsso zera *todos* os gols e assistências do grupo (${pessoas} ${pessoas === 1 ? 'jogador' : 'jogadores'}).\n\n` +
+        `Pra confirmar, mande: */resetartilharia confirmar*`
+      );
+    }
+    const t = this.agora();
+    for (const r of ativos) { r.desfeito = true; r.resetEm = t; }
+    say('🧹 *Artilharia resetada!* Todos os gols e assistências foram zerados. Bora começar do zero! ⚽');
   }
 
   // ---------- consultas ----------
@@ -299,29 +335,21 @@ class Contagem {
     );
   }
 
-  lista(ctx) {
-    const todos = [...this.totais(ctx.msg.chatId).values()].sort(
-      (a, b) => b.gols - a.gols || b.assist - a.assist || a.jogos - b.jogos
-    );
-    if (!todos.length) return ctx.say('Nenhuma partida registrada ainda.');
-    const linhas = todos.slice(0, 40).map(
-      (t, i) => `${i + 1}. ${this.nome(t.id)} — ${t.jogos} ${t.jogos === 1 ? 'jogo' : 'jogos'} · ⚽ ${t.gols} · 🎯 ${t.assist}`
-    );
-    ctx.say(`📊 *Lista geral* (${todos.length} jogadores)\n\n${linhas.join('\n')}`);
-  }
-
-  top(ctx, campo) {
-    const medalha = (i) => ['🥇', '🥈', '🥉'][i] || `${i + 1}.`;
+  // /artilheiros e /assistencias: mesma lista, ordenada por participações (gols + assistências)
+  ranking(ctx) {
     const itens = [...this.totais(ctx.msg.chatId).values()]
-      .filter((t) => t[campo] > 0)
-      .sort((a, b) => b[campo] - a[campo] || a.jogos - b.jogos)
-      .slice(0, 10);
-    const titulo = campo === 'gols' ? '⚽ *Artilheiros*' : '🎯 *Assistentes*';
-    if (!itens.length) return ctx.say(`${titulo}\n\nNinguém registrou ainda.`);
-    ctx.say(
-      `${titulo}\n\n` +
-      itens.map((t, i) => `${medalha(i)} ${this.nome(t.id)} — ${t[campo]} em ${t.jogos} ${t.jogos === 1 ? 'jogo' : 'jogos'}`).join('\n')
+      .map((t) => ({ ...t, total: t.gols + t.assist }))
+      .filter((t) => t.total > 0)
+      .sort((a, b) => b.total - a.total || b.gols - a.gols || b.assist - a.assist || this.nome(a.id).localeCompare(this.nome(b.id)));
+    if (!itens.length) return ctx.say('🏆 *Artilharia e assistências*\n\nNinguém registrou gols ou assistências ainda.');
+    const MAX_LISTA = 30;
+    const mostrados = itens.slice(0, MAX_LISTA);
+    const linhas = mostrados.map(
+      (t, i) => `${i + 1}º ${tag(t.id)} - ${txtGols(t.gols)} - ${txtAssist(t.assist)}\n     participações totais: ${t.total}`
     );
+    let txt = `🏆 *Artilharia e assistências*\n\n${linhas.join('\n\n')}`;
+    if (itens.length > MAX_LISTA) txt += `\n\n... e mais ${itens.length - MAX_LISTA}.`;
+    ctx.say(txt, mostrados.map((t) => t.id));
   }
 }
 

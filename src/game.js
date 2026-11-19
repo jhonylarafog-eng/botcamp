@@ -39,7 +39,7 @@ Todo mundo escolhe um clube; quando enche, o bot embaralha os jogadores entre os
 /status — situação do campeonato
 
 *Rankings*
-/ranking /trofeus /artilharia /assistencias
+/ranking /trofeus /artilharia
 /derrotas /duplas /trios /perfil
 
 *Contagem de gols e assistências*
@@ -47,9 +47,10 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 (admin) responda ao print com /ok pra confirmar
 (admin) ou corrija: /reg @fulano 2 gols 1 assistência
 (admin) /add @fulano 3 gols 2 assistências — soma direto, sem print (opcional: 4 jogos)
-(admin) /desfazer N — cancela um registro
-/listagols — jogos, gols e assistências de todos
-/artilheiros /assistentes /pendentes
+(admin) /remover3gol @fulano — tira 3 gols (use /remover2assistencia @fulano pra assistências)
+(admin) /resetartilharia — zera todos os gols e assistências (pede confirmação)
+/artilheiros ou /assistencias — lista com todos, por participações
+/pendentes
 
 *Bola de Ouro (votação)*
 (admin) /bolaouro Temporada 1 — abre a votação
@@ -177,7 +178,7 @@ class Bot {
       case 'ranking': case 'elo': return say(rank.rankingElo(this.store, msg.chatId));
       case 'trofeus': return say(rank.trofeus(this.store, msg.chatId));
       case 'artilharia': return say(rank.artilharia(this.store, msg.chatId));
-      case 'assistencias': return say(rank.assistencias(this.store, msg.chatId));
+      case 'assistencias': return this.contagem.ranking(ctx); // mostra artilheiros e assistentes juntos
       case 'derrotas': return say(rank.derrotas(this.store, msg.chatId));
       case 'duplas': return say(rank.combos(this.store, msg.chatId, 2));
       case 'trios': return say(rank.combos(this.store, msg.chatId, 3));
@@ -186,14 +187,17 @@ class Bot {
       case 'reg': case 'registrar': return this.contagem.reg(ctx, args);
       case 'ok': return this.contagem.ok(ctx);
       case 'add': case 'adicionar': return this.contagem.adicionar(ctx, args);
-      case 'desfazer': return this.contagem.desfazer(ctx, args);
       // /lista (sozinho) é ignorado de propósito: outro bot do grupo usa esse comando
-      case 'listagols': return this.contagem.lista(ctx);
       case 'listatimes':
         if (camp && camp.status === 'inscricoes') return this.listaTimes(ctx, camp);
         return say('Não tem inscrições abertas agora. Use /iniciar ou /x3aleatorio (admin).');
-      case 'artilheiros': return this.contagem.top(ctx, 'gols');
-      case 'assistentes': return this.contagem.top(ctx, 'assist');
+      case 'artilheiros': return this.contagem.ranking(ctx);
+      case 'resetartilharia': case 'resetarartilharia': case 'zerarartilharia': return this.contagem.resetar(ctx, args);
+      case 'remover': { // forma com espaço: /remover 3 gols @fulano
+        const m = norm(args).match(/^(\d{1,3}) ?(gols?|assistencias?)\b/);
+        if (!m) return;
+        return this.contagem.removerStats(ctx, parseInt(m[1], 10), m[2].startsWith('gol') ? 'gols' : 'assist');
+      }
       case 'pendentes': return this.contagem.pendentes(ctx);
       // Bola de Ouro (votação)
       case 'bolaouro': case 'bolaodeouro': case 'votacao': return this.votacao.abrir(ctx, args);
@@ -205,7 +209,12 @@ class Bot {
       case 'encerrarpuskas': return this.puskas.encerrar(ctx);
       case 'cancelarvotacao': return this.votacao.cancelar(ctx);
       case 'hall': return this.votacao.hall(ctx);
-      default: return; // comando desconhecido: ignora (pode ser de outro bot)
+      default: {
+        // /remover3gol @fulano  e  /remover5assistencia @fulano
+        const m = cmd.match(/^remover(\d{1,3})(gols?|assistencias?)$/);
+        if (m) return this.contagem.removerStats(ctx, parseInt(m[1], 10), m[2].startsWith('gol') ? 'gols' : 'assist');
+        return; // comando desconhecido: ignora (pode ser de outro bot)
+      }
     }
   }
 

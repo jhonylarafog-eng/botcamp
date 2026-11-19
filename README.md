@@ -12,7 +12,7 @@ Bot que organiza campeonatos **X1, X2 e X3** em grupos de WhatsApp. O jogo roda 
 6. Fim do jogo: `/placar 3x1` (seu time primeiro) e o adversário confirma com `/confirmar`. Empate: `/placar 2x2 pen 4x3`
 7. Cada jogador registra `/gols N` e `/assist N` da última partida
 
-Rankings: `/ranking` (ELO), `/trofeus`, `/artilharia`, `/assistencias`, `/derrotas`, `/duplas`, `/trios`, `/perfil`.
+Rankings: `/ranking` (ELO), `/trofeus`, `/artilharia`, `/derrotas`, `/duplas`, `/trios`, `/perfil`.
 
 Admins do grupo (ou quem iniciou o campeonato) podem usar `/comecar`, `/cancelar` e `/forcar`.
 
@@ -22,14 +22,14 @@ Admins do grupo (ou quem iniciou o campeonato) podem usar `/comecar`, `/cancelar
 2. O bot registra um pedido pendente. Um **admin** responde ao print com `/ok` para confirmar.
 3. Para corrigir os números: `/reg @fulano 2 gols 1 assistência`, também **respondendo ao print**. O `/reg` não funciona sem citar um print.
 4. Cada registro conta 1 partida jogada. Um mesmo print não pode ser contado duas vezes.
-5. `/desfazer N` cancela o registro número N (o print pode ser registrado de novo).
-6. **Adição manual (admin, sem print):** `/add @fulano 3 gols 2 assistências` soma direto. Opcional `4 jogos` para contar partidas (por padrão soma 0 jogos). Vários jogadores: um por linha, separados por `;` ou só marcando um depois do outro. Dá pra desfazer com `/desfazer N`.
+5. **Remover (admin):** `/remover3gol @fulano` ou `/remover5assistencia @fulano` tira gols/assistências (só se a pessoa tiver essa quantidade). **Resetar (admin):** `/resetartilharia` pede confirmação; `/resetartilharia confirmar` zera tudo.
+6. **Adição manual (admin, sem print):** `/add @fulano 3 gols 2 assistências` soma direto. Opcional `4 jogos` para contar partidas (por padrão soma 0 jogos). Vários jogadores: um por linha, separados por `;` ou só marcando um depois do outro.
 
-Consultas: `/listagols` (jogos, gols e assistências de todos), `/artilheiros`, `/assistentes`, `/pendentes`.
+Consultas: `/artilheiros` ou `/assistencias` (mesma lista: todos marcados, por participações = gols + assistências), `/pendentes`.
 
 ## Bola de Ouro (votação)
 
-1. Um admin abre com `/bolaouro Temporada 1`. Os candidatos são os jogadores que têm partida registrada (`/listagols`).
+1. Um admin abre com `/bolaouro Temporada 1`. Os candidatos são os jogadores que têm partida registrada (`/artilheiros`).
 2. Cada candidato vota nos **3 melhores**, em ordem: `/votar @1º @2º @3º` (ou pelos nomes: `/votar ana, bia, caio`). O 1º vale 5 pontos, o 2º vale 3 e o 3º vale 1. Não vale votar em si mesmo, e dá pra mudar o voto votando de novo.
 3. O voto é **aberto**: o bot mostra no grupo cada voto. `/votos` mostra quem votou, quem falta e a parcial.
 4. O admin encerra com `/encerrar`: o bot apura (desempate por mais 1º lugares, depois mais 2º), anuncia o campeão e guarda no `/hall`. `/cancelarvotacao` descarta.
@@ -89,7 +89,7 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 
 - Quando alguém entra num clube, o bot mostra o time (nome + jogadores marcados + vagas livres).
 - `/listatimes` mostra todos os times: completos e com vagas.
-- O bot **ignora `/lista`** de propósito, porque outro bot do grupo usa esse comando. Gols e assistências: `/listagols`.
+- O bot **ignora `/lista`** de propósito, porque outro bot do grupo usa esse comando. Gols e assistências: `/artilheiros`.
 
 ## Prêmio Puskas (gol mais bonito do dia)
 

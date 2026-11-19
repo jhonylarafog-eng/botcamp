@@ -83,9 +83,9 @@ assert.match(r.saida, /print enviado por Ana/);
 assert.match(fala('admin', '/reg @ana 5 gols', { mentions: [ID.ana], ...citando(p4, 'ana') }).saida, /já foi contado/);
 assert.match(fala('admin', '/reg @ana 5 gols', { mentions: [ID.ana], ...citando(p1, 'ana') }).saida, /já foi contado/);
 
-// 9) /desfazer libera o print pra ser registrado de novo
-assert.match(fala('bia', '/desfazer 1').saida, /Só admin/);
-assert.match(fala('admin', '/desfazer 1').saida, /desfeito/);
+// 9) o /desfazer não existe mais; um registro desfeito (ex.: depois de um reset) libera o print
+assert.strictEqual(fala('admin', '/desfazer 1').saida, '', '/desfazer foi removido');
+store.data.registros[1].desfeito = true; // simula o registro #1 desfeito
 assert.match(fala('admin', '/reg @ana 4 gols 2 assistências', { mentions: [ID.ana], ...citando(p1, 'ana') }).saida, /registrado/);
 
 // 10) número absurdo
@@ -96,10 +96,17 @@ assert.strictEqual(fala('caio', 'bora jogar mais tarde?').saida, '');
 
 // 12) consultas
 assert.strictEqual(fala('ana', '/lista').saida, '', '/lista é de outro bot: ignorar');
-const lista = fala('ana', '/listagols').saida;
-assert.match(lista, /Lista geral/);
-fala('ana', '/artilheiros');
-fala('ana', '/assistentes');
+assert.strictEqual(fala('ana', '/listagols').saida, '');
+assert.strictEqual(fala('ana', '/assistentes').saida, '');
+const rk = fala('ana', '/artilheiros');
+assert.strictEqual(fala('ana', '/assistencias').saida, rk.saida, '/artilheiros e /assistencias mostram a mesma lista');
+assert.doesNotMatch(rk.saida, /jogo/i, 'a lista não mostra quantidade de jogos');
+assert.match(rk.saida, /1º @ana - 4 gols - 2 assistências\n\s+participações totais: 6/);
+assert.match(rk.saida, /2º @davi - 2 gols - 3 assistências\n\s+participações totais: 5/);
+assert.match(rk.saida, /3º @caio - 3 gols - 0 assistências\n\s+participações totais: 3/);
+assert.match(rk.saida, /4º @bia - 1 gol - 0 assistências\n\s+participações totais: 1/);
+assert.ok(rk.saida.indexOf('@ana') < rk.saida.indexOf('@davi') && rk.saida.indexOf('@davi') < rk.saida.indexOf('@caio'), 'ordem por participações');
+assert.deepStrictEqual(ultimas[0].mentions, [ID.ana, ID.davi, ID.caio, ID.bia], 'a lista marca as pessoas');
 fala('ana', '/pendentes');
 
 const tot = bot.contagem.totais(CHAT);
@@ -146,11 +153,35 @@ assert.match(a3.saida, /#9[\s\S]*#10/);
 // erros
 assert.match(fala('admin', '/add 3 gols').saida, /Marque o jogador/);
 assert.match(fala('admin', '/add @caio oi', { mentions: [ID.caio] }).saida, /Não entendi/);
-// desfazer uma adição manual
-const idManual = Object.values(store.data.registros).find((r) => r.manual && r.jogador === ID.caio).id;
-assert.match(fala('admin', `/desfazer ${idManual}`).saida, /Adição manual removida/);
+// ---------- /remover3gol, /remover5assistencia ----------
+const caio0 = bot.contagem.totais(CHAT).get(ID.caio);
+assert.deepStrictEqual([caio0.gols, caio0.assist], [5, 1]);
+assert.match(fala('bia', '/remover1gol @caio', { mentions: [ID.caio] }).saida, /Só admin/);
+assert.match(fala('admin', '/remover1gol').saida, /Marque uma pessoa/);
+assert.match(fala('admin', '/remover9gol @caio', { mentions: [ID.caio] }).saida, /só tem 5 gols\. Não dá pra remover 9 gols/);
+assert.match(fala('admin', '/remover2assistencia @caio', { mentions: [ID.caio] }).saida, /só tem 1 assistência/);
+assert.match(fala('admin', '/remover0gol @caio', { mentions: [ID.caio] }).saida, /de 1 a 200/);
+let rr = fala('admin', '/remover2gol @caio', { mentions: [ID.caio] });
+assert.match(rr.saida, /Removido:\* 2 gols de @caio/);
+assert.match(rr.saida, /Agora: 3 gols · 1 assistência \(participações totais: 4\)/);
+assert.match(fala('admin', '/remover1assistencia @caio', { mentions: [ID.caio] }).saida, /Agora: 3 gols · 0 assistências/);
+assert.match(fala('admin', '/remover 1 gol @caio', { mentions: [ID.caio] }).saida, /Agora: 2 gols/); // forma com espaço
+assert.match(fala('admin', '/remover1gols @caio', { mentions: [ID.caio] }).saida, /Agora: 1 gol ·/);     // plural também vale
 t = bot.contagem.totais(CHAT).get(ID.caio);
-assert.deepStrictEqual([t.jogos, t.gols, t.assist], [1, 3, 0]);
-fala('ana', '/listagols');
+assert.deepStrictEqual([t.jogos, t.gols, t.assist], [1, 1, 0]); // remover gol não tira partida
+fala('admin', '/remover1gol @caio', { mentions: [ID.caio] });
+assert.doesNotMatch(fala('ana', '/artilheiros').saida, /@caio/, 'quem zerou sai da lista');
+
+// ---------- /resetartilharia ----------
+assert.match(fala('bia', '/resetartilharia').saida, /Só admin/);
+const antesReset = fala('admin', '/resetartilharia').saida;
+assert.match(antesReset, /Resetar a artilharia\?[\s\S]*\/resetartilharia confirmar/);
+assert.ok(bot.contagem.totais(CHAT).size > 0, 'sem confirmar, nada é apagado');
+assert.match(fala('admin', '/resetartilharia confirmar').saida, /Artilharia resetada/);
+assert.match(fala('ana', '/artilheiros').saida, /Ninguém registrou gols ou assistências ainda/);
+assert.strictEqual(bot.contagem.totais(CHAT).size, 0);
+// depois do reset dá pra registrar tudo de novo (inclusive o mesmo print)
+assert.match(fala('admin', '/add @ana 2 gols 1 assistência', { mentions: [ID.ana] }).saida, /Adicionado/);
+assert.match(fala('ana', '/artilheiros').saida, /1º @ana - 2 gols - 1 assistência\n\s+participações totais: 3/);
 
 console.log('\n✅ CONTAGEM: TODOS OS TESTES PASSARAM');

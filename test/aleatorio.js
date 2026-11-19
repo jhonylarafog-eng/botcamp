@@ -119,9 +119,8 @@ function novo() {
   // trocar de clube mostra os dois
   t = diz(A, c2);
   assert.match(t, /saiu do .* e entrou no time/);
-  // /lista sozinho é ignorado (é de outro bot) e /listagols é a contagem
+  // /lista sozinho é ignorado (é de outro bot)
   assert.strictEqual(diz(A, '/lista'), '');
-  assert.doesNotMatch(diz(A, '/listagols'), /Completos/);
 }
 
 console.log('\n✅ MODO ALEATÓRIO: TODOS OS TESTES PASSARAM');
