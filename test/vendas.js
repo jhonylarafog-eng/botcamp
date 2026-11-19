@@ -16,9 +16,16 @@ const esperar = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 // ---------- ambiente simulado ----------
 function montar({ respostas = [], env = {}, falhaClaude = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vendas-'));
-  const chamadas = { claude: [], groq: [], telegram: [] };
+  const chamadas = { claude: [], groq: [], gemini: [], telegram: [] };
   const fila = respostas.slice();
   const fetch = async (url, opts) => {
+    if (url.includes('generativelanguage.googleapis.com')) {
+      const corpo = JSON.parse(opts.body);
+      chamadas.gemini.push({ url, chave: opts.headers['x-goog-api-key'], corpo });
+      const ehAudio = (corpo.contents?.[0]?.parts || []).some((p) => p.inlineData?.mimeType?.startsWith('audio/'));
+      const texto = ehAudio ? 'quero um vídeo do meu filho brincando' : (fila.length ? fila.shift() : 'ok');
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: texto }] } }] }) };
+    }
     if (url.includes('anthropic.com')) {
       chamadas.claude.push(JSON.parse(opts.body));
       if (falhaClaude) return { ok: false, status: 529, text: async () => 'overloaded', json: async () => ({}) };
@@ -246,6 +253,68 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     await esperar();
     assert.strictEqual(chamadas.claude.length, 0);
   });
+  console.log('Gemini (plano grátis)');
+  const SO_GEMINI = { ANTHROPIC_API_KEY: '', GROQ_API_KEY: '', GEMINI_API_KEY: 'chave-gemini' };
+  await teste('escolha do provedor', () => {
+    assert.strictEqual(montar().v.provedor, 'claude');
+    assert.strictEqual(montar({ env: SO_GEMINI }).v.provedor, 'gemini');
+    assert.strictEqual(montar({ env: { GEMINI_API_KEY: 'x' } }).v.provedor, 'claude'); // com as duas chaves, vale o Claude
+    assert.strictEqual(montar({ env: { GEMINI_API_KEY: 'x', VENDAS_PROVEDOR: 'gemini' } }).v.provedor, 'gemini');
+  });
+  await teste('Gemini: texto vai no formato certo e a resposta é enviada', async () => {
+    const { v, sock, chamadas, enviadas } = montar({ env: SO_GEMINI, respostas: ['Opa, tudo certo?\n\nAqui é do Estúdio Digital 🎬'] });
+    await v.receber(sock, msgTexto('Opa, posso ter mais informações sobre isso?'));
+    await esperar();
+    assert.strictEqual(chamadas.claude.length, 0);
+    assert.strictEqual(chamadas.gemini.length, 1);
+    const g = chamadas.gemini[0];
+    assert.ok(g.url.includes('/models/gemini-flash-latest:generateContent'));
+    assert.strictEqual(g.chave, 'chave-gemini');
+    assert.ok(g.corpo.systemInstruction.parts[0].text.includes('pix@exemplo.com'));
+    assert.deepStrictEqual(g.corpo.contents, [{ role: 'user', parts: [{ text: 'Opa, posso ter mais informações sobre isso?' }] }]);
+    assert.strictEqual(enviadas.length, 2);
+  });
+  await teste('Gemini: histórico usa os papéis user e model', async () => {
+    const { v, sock, chamadas } = montar({ env: SO_GEMINI, respostas: ['Oi!', 'Beleza'] });
+    await v.receber(sock, msgTexto('oi'));
+    await esperar();
+    await v.receber(sock, msgTexto('quero um vídeo'));
+    await esperar();
+    const papeis = chamadas.gemini[1].corpo.contents.map((c) => c.role);
+    assert.deepStrictEqual(papeis, ['user', 'model', 'user']);
+  });
+  await teste('Gemini: áudio é transcrito pelo próprio Gemini quando não há Groq', async () => {
+    const { v, sock, chamadas } = montar({ env: SO_GEMINI });
+    await v.receber(sock, msgAudio());
+    await esperar();
+    assert.strictEqual(chamadas.groq.length, 0);
+    assert.strictEqual(chamadas.gemini.length, 2);
+    assert.strictEqual(chamadas.gemini[0].corpo.contents[0].parts[0].inlineData.mimeType, 'audio/ogg');
+    assert.ok(chamadas.gemini[1].corpo.contents[0].parts[0].text.includes('[áudio do cliente] quero um vídeo do meu filho brincando'));
+  });
+  await teste('Gemini: comprovante em imagem vai como inlineData', async () => {
+    const { v, sock, chamadas } = montar({ env: SO_GEMINI });
+    await v.receber(sock, msgImagem());
+    await esperar();
+    const partes = chamadas.gemini[0].corpo.contents[0].parts;
+    assert.strictEqual(partes[0].inlineData.mimeType, 'image/jpeg');
+    assert.ok(partes[1].text.includes('comprovante'));
+  });
+  await teste('Gemini: pagamento avisa no Telegram igual ao Claude', async () => {
+    const { v, sock, chamadas } = montar({ env: SO_GEMINI, respostas: ['Recebi, vou conferir!\n[[PAGAMENTO|vídeo 17s R$31]]'] });
+    await v.receber(sock, msgTexto('paguei'));
+    await esperar();
+    assert.strictEqual(chamadas.telegram.length, 1);
+    assert.ok(chamadas.telegram[0].text.includes('PAGOU'));
+  });
+  await teste('sem a chave do provedor escolhido: avisa o dono e não responde', async () => {
+    const { v, sock, chamadas, enviadas } = montar({ env: { ANTHROPIC_API_KEY: '', VENDAS_PROVEDOR: 'gemini' } });
+    await v.receber(sock, msgTexto('oi'));
+    await esperar();
+    assert.strictEqual(enviadas.length, 0);
+    assert.ok(chamadas.telegram[0].text.includes('GEMINI_API_KEY'));
+  });
+
   await teste('conversa salva em disco e recarregada', async () => {
     const a = montar();
     await a.v.receber(a.sock, msgTexto('oi'));

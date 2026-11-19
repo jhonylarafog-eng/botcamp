@@ -8,8 +8,11 @@
 //
 // Variáveis de ambiente (tudo opcional, exceto as duas primeiras pra ligar):
 //   VENDAS_ATIVO=sim        liga o atendente (qualquer outro valor = desligado)
-//   ANTHROPIC_API_KEY       chave da API do Claude
-//   GROQ_API_KEY            chave do Groq (transcrever áudio). Sem ela, o cliente é convidado a escrever
+//   ANTHROPIC_API_KEY       chave da API do Claude (pago, precisa de cartão)
+//   GEMINI_API_KEY          chave do Gemini (plano grátis, sem cartão; também ouve áudio e lê imagem)
+//   VENDAS_PROVEDOR         claude ou gemini. Se vazio: claude quando houver ANTHROPIC_API_KEY, senão gemini
+//   VENDAS_MODELO_GEMINI    modelo do Gemini (padrão: gemini-flash-latest)
+//   GROQ_API_KEY            chave do Groq (transcrever áudio). Sem ela, usa o Gemini; sem nenhum, o cliente é convidado a escrever
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID   avisos pro dono
 //   PIX_CHAVE, PIX_NOME     chave Pix que o atendente manda ao cliente
 //   VENDAS_MODELO           modelo do Claude (padrão: claude-haiku-5-5)
@@ -24,6 +27,7 @@ const { montarPrompt } = require('./prompt');
 
 const API_CLAUDE = 'https://api.anthropic.com/v1/messages';
 const API_GROQ = 'https://api.groq.com/openai/v1/audio/transcriptions';
+const API_GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MAX_HISTORICO = 40;
 const MAX_IMAGEM_BYTES = 5 * 1024 * 1024;
 const MAX_AUDIO_SEG = 300;
@@ -92,6 +96,9 @@ function criarVendas(opcoes = {}) {
 
   const ativo = String(env.VENDAS_ATIVO || '').toLowerCase() === 'sim';
   const modelo = env.VENDAS_MODELO || 'claude-haiku-5-5';
+  const modeloGemini = env.VENDAS_MODELO_GEMINI || 'gemini-flash-latest';
+  const provedor = String(env.VENDAS_PROVEDOR || (env.ANTHROPIC_API_KEY ? 'claude' : env.GEMINI_API_KEY ? 'gemini' : 'claude')).toLowerCase();
+  const nomeChave = provedor === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
   const esperaMs = env.VENDAS_ESPERA_MS !== undefined ? Number(env.VENDAS_ESPERA_MS) : 7000;
   const limiteDia = Number(env.VENDAS_LIMITE_DIA || 400);
   const limiteChatDia = Number(env.VENDAS_LIMITE_CHAT_DIA || 80);
@@ -177,8 +184,25 @@ function criarVendas(opcoes = {}) {
   }
 
   // ---------- Groq: áudio → texto ----------
+  // ---------- Gemini: áudio → texto (usado quando não há chave do Groq) ----------
+  async function transcreverGemini(buffer) {
+    try {
+      const texto = await chamarGemini({
+        contents: [{ role: 'user', parts: [
+          { inlineData: { mimeType: 'audio/ogg', data: buffer.toString('base64') } },
+          { text: 'Transcreva fielmente, em português do Brasil, o que a pessoa fala neste áudio. Responda só com a transcrição, sem comentários.' },
+        ] }],
+        generationConfig: { maxOutputTokens: 2048, temperature: 0 },
+      });
+      return texto.trim() || null;
+    } catch (e) {
+      log.error('[vendas] falha ao transcrever áudio (Gemini):', e.message);
+      return null;
+    }
+  }
+
   async function transcrever(buffer) {
-    if (!env.GROQ_API_KEY) return null;
+    if (!env.GROQ_API_KEY) return env.GEMINI_API_KEY ? transcreverGemini(buffer) : null;
     try {
       const form = new FormData();
       form.append('file', new Blob([buffer], { type: 'audio/ogg' }), 'audio.ogg');
@@ -197,13 +221,69 @@ function criarVendas(opcoes = {}) {
     }
   }
 
-  // ---------- Claude ----------
+  // ---------- IA: Claude ou Gemini ----------
+  const sistemaAtual = () => montarPrompt({
+    pixChave: env.PIX_CHAVE,
+    pixNome: env.PIX_NOME,
+    agora: agora().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' }),
+  });
+
+  // Uma chamada ao Gemini. Devolve o texto da resposta ou lança erro.
+  async function chamarGemini(corpo) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 45_000);
+    try {
+      const r = await fetchImpl(`${API_GEMINI}/${modeloGemini}:generateContent`, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+        body: JSON.stringify(corpo),
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '');
+        throw new Error(`Gemini ${r.status} ${txt.slice(0, 160)}`);
+      }
+      const j = await r.json();
+      const cand = (j.candidates || [])[0];
+      const texto = ((cand && cand.content && cand.content.parts) || []).map((p) => p.text || '').join('\n').trim();
+      if (!texto) throw new Error('Gemini sem texto (' + ((cand && cand.finishReason) || (j.promptFeedback && j.promptFeedback.blockReason) || 'vazio') + ')');
+      return texto;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  // Converte as mensagens (formato do Claude) pro formato do Gemini.
+  function paraGemini(mensagens) {
+    return mensagens.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: (Array.isArray(m.content) ? m.content : [{ type: 'text', text: m.content }]).map((b) =>
+        b.type === 'image' ? { inlineData: { mimeType: b.source.media_type, data: b.source.data } } : { text: b.text }),
+    }));
+  }
+
+  async function perguntarGemini(mensagens) {
+    const corpo = {
+      systemInstruction: { parts: [{ text: sistemaAtual() }] },
+      contents: paraGemini(mensagens),
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.7 },
+    };
+    let ultimoErro;
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      try {
+        return await chamarGemini(corpo);
+      } catch (e) {
+        ultimoErro = e;
+        if (tentativa === 0) await dormir(2500);
+      }
+    }
+    throw ultimoErro;
+  }
+
+  const perguntarIA = (mensagens) => (provedor === 'gemini' ? perguntarGemini(mensagens) : perguntarClaude(mensagens));
+
   async function perguntarClaude(mensagens) {
-    const sistema = montarPrompt({
-      pixChave: env.PIX_CHAVE,
-      pixNome: env.PIX_NOME,
-      agora: agora().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' }),
-    });
+    const sistema = sistemaAtual();
     let ultimoErro;
     for (let tentativa = 0; tentativa < 2; tentativa++) {
       try {
@@ -317,8 +397,8 @@ function criarVendas(opcoes = {}) {
     if (chat.pausado) return;
     virouODia();
 
-    if (!env.ANTHROPIC_API_KEY) {
-      await avisarDono('⚠️ Atendente de vendas ligado, mas falta a ANTHROPIC_API_KEY na Railway.', 'sem-chave');
+    if (!env[nomeChave]) {
+      await avisarDono(`⚠️ Atendente de vendas ligado, mas falta a ${nomeChave} na Railway.`, 'sem-chave');
       return;
     }
     if (estado.totalDia >= limiteDia || chat.respostasDia >= limiteChatDia) {
@@ -374,10 +454,10 @@ function criarVendas(opcoes = {}) {
 
     let resposta;
     try {
-      resposta = await perguntarClaude(mensagens);
+      resposta = await perguntarIA(mensagens);
     } catch (e) {
-      log.error('[vendas] Claude falhou:', e.message);
-      await avisarDono(`⚠️ O atendente não conseguiu responder um cliente (${contato(jid, chat.nome)}). Pode ser crédito da API acabando. Responda você por enquanto.`, 'falha-claude');
+      log.error(`[vendas] ${provedor} falhou:`, e.message);
+      await avisarDono(`⚠️ O atendente não conseguiu responder um cliente (${contato(jid, chat.nome)}). Pode ser limite de uso ou crédito da API acabando. Responda você por enquanto.`, 'falha-ia');
       return;
     }
 
@@ -408,7 +488,7 @@ function criarVendas(opcoes = {}) {
     }
   }
 
-  return { ativo, ehPrivado, receber, salvarAgora, _estado: () => estado };
+  return { ativo, provedor, ehPrivado, receber, salvarAgora, _estado: () => estado };
 }
 
 module.exports = { criarVendas, classificar, tirarMarcacoes, dividir };
