@@ -35,7 +35,7 @@ const gol = (quem) => diz(quem, '/puskas', { video: novoVideo() });
 // ---------- registro ----------
 assert.match(diz(U(1), '/puskas').t, /Prêmio Puskas[\s\S]*0\/10/);
 let { t } = gol(U(1));
-assert.match(t, /Gol registrado.*gol #1 de hoje \(1\/10\)/);
+assert.match(t, /Gol registrado.*gol #1 \(1\/10\)/);
 gol(U(2));
 // vídeo repetido
 const rep = novoVideo();
@@ -44,16 +44,16 @@ assert.match(diz(U(4), '/puskas', { video: rep }).t, /já está na lista/);
 // citado: o autor é o dono do vídeo
 ({ t } = diz(U(5), '/puskas', { video: novoVideo(U(6)) }));
 assert.match(t, /@5511900000006/);
-assert.match(diz(U(1), '/puskas lista').t, /Gols Puskas de hoje\* \(4\/10\)/);
+assert.match(diz(U(1), '/puskas lista').t, /Gols esperando votação\* \(4\/10\)/);
 // erro de download
 assert.match(diz(U(1), '/puskas', { videoErro: 'Não consegui baixar esse vídeo.' }).t, /Não consegui baixar/);
 
-// ---------- limite de 10 por dia ----------
+// ---------- limite de 10 esperando votação ----------
 for (let i = 7; i <= 12; i++) gol(U(i)); // chega a 10
 assert.match(diz(U(1), '/puskas lista').t, /\(10\/10\)/);
 const v11 = novoVideo();
 ({ t } = diz(U(13), '/puskas', { video: v11 }));
-assert.match(t, /Hoje já chegaram 10 gols/);
+assert.match(t, /lista está cheia \(10 gols esperando votação\)/);
 assert.ok(!arquivoExiste(v11.arquivo), 'vídeo recusado deve ser apagado');
 assert.strictEqual(store.data.puskas.gols && Object.values(store.data.puskas.gols).filter((g) => !g.removido).length, 10);
 
@@ -107,7 +107,7 @@ assert.match(diz(U(57), '/puskas votar 99').t, /de 1 a 10/);
 assert.match(diz(U(57), '/puskasvotar4').t, /Voto registrado no gol 4/);
 assert.match(diz(U(57), '/votarpuskas5').t, /Voto registrado no gol 5/);
 assert.match(diz(U(57), '/puskasvotar 3').t, /Voto registrado no gol 3/);
-assert.match(diz(U(57), '/puskaslista').t, /Gols Puskas de hoje/);
+assert.match(diz(U(57), '/puskaslista').t, /Gols esperando votação/);
 assert.match(diz(U(57), '/puskasvotar99').t, /de 1 a 10/);
 assert.match(diz(U(1), '/puskashall').t, /Hall do Puskas|Ainda não|Nenhum/);
 assert.match(diz(U(57), '/puskas votar 3').t, /Voto registrado no gol 3/); // volta pro voto original
@@ -131,8 +131,8 @@ assert.match(diz(U(1), '/puskas hall').t, /Hall do Puskas[\s\S]*Quem já ganhou\
 
 // ---------- no dia seguinte: empate, cancelar, poucos gols ----------
 agora = new Date('2026-11-18T10:00:00-03:00').getTime();
-assert.match(diz(ADMIN, '/iniciar puskas', {}, true).t, /pelo menos 2 gols pra votar \(hoje: 0\)/);
-assert.match(diz(U(1), '/puskas lista').t, /Nenhum gol Puskas hoje/);
+assert.match(diz(ADMIN, '/iniciar puskas', {}, true).t, /pelo menos 2 gols pra votar \(na lista: 0\)/);
+assert.match(diz(U(1), '/puskas lista').t, /Nenhum gol esperando votação/);
 gol(U(21)); gol(U(22));
 ({ r } = diz(ADMIN, '/iniciar puskas', {}, true));
 r.filter((x) => x.video).forEach((v, i) => v.onSent(`B2-${i + 1}`));
@@ -147,6 +147,9 @@ gol(U(31)); gol(U(32));
 assert.match(diz(ADMIN, '/puskas cancelar', {}, true).t, /cancelada/);
 assert.strictEqual(diz(ADMIN, '/iniciar puskas', {}, true).r.filter((x) => x.video).length, 2);
 diz(ADMIN, '/puskas cancelar', {}, true);
+// os 2 gols cancelados continuam na lista (não somem na virada do dia); aqui tiramos pra seguir o teste
+diz(ADMIN, '/puskas remover 1', {}, true);
+diz(ADMIN, '/puskas remover 2', {}, true);
 
 // ---------- ranking de campeões: quem ganha de novo soma ----------
 agora += 86_400_000; // dia 3
@@ -169,12 +172,19 @@ const bot2 = new Bot(Object.assign(new Store(null), { data: salvo }), { dataDir:
 const h2 = bot2.handle({ chatId: CHAT, senderId: U(1), senderName: 'x', text: '/puskas hall', isAdmin: false });
 assert.match(h2[0].text, /@5511900000021 — 2 Puskas/);
 
-// ---------- limpeza de vídeos antigos ----------
+// ---------- os gols NÃO somem na virada do dia: ficam até uma votação ----------
 const velho = novoVideo();
 diz(U(70), '/puskas', { video: velho });
-agora += 5 * 86_400_000;
+agora += 5 * 86_400_000; // 5 dias depois
 gol(U(71)); // dispara a limpeza
-assert.ok(!arquivoExiste(velho.arquivo), 'vídeo velho deveria ter sido apagado');
+assert.ok(arquivoExiste(velho.arquivo), 'gol que ainda não foi votado deve continuar guardado');
+assert.match(diz(U(1), '/puskas lista').t, /Gols esperando votação\* \(2\/10\)/);
+({ r } = diz(ADMIN, '/iniciar puskas', {}, true));
+assert.strictEqual(r.filter((x) => x.video).length, 2, 'a votação usa os gols guardados de dias anteriores');
+r.filter((x) => x.video).forEach((v, i) => v.onSent(`B4-${i + 1}`));
+reage(U(90), 'B4-1');
+diz(ADMIN, '/encerrar puskas', {}, true);
+assert.match(diz(U(1), '/puskas lista').t, /Nenhum gol esperando votação/); // depois de votado, a lista zera
 
 // a Bola de Ouro foi removida: /encerrar sozinho e os comandos dela não fazem nada
 for (const c of ['/encerrar', '/bolaouro Temporada 1', '/votar @a @b @c', '/votos', '/hall', '/cancelarvotacao']) {

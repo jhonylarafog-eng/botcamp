@@ -1,4 +1,4 @@
-// Prêmio Puskas: o jogador manda o vídeo do gol com /puskas (máx. 10 por dia).
+// Prêmio Puskas: o jogador manda o vídeo do gol com /puskas (máx. 10 esperando votação).
 // O admin abre a votação com /iniciar puskas: o bot explica, reenvia os gols um a um (marcando o autor) e as pessoas
 // votam REAGINDO ao vídeo do gol que acharam mais bonito (1 voto por pessoa; trocar a reação muda o voto).
 // /encerrar puskas apura e anuncia o Gol Puskas do dia.
@@ -48,8 +48,14 @@ class Puskas {
     g.arquivo = null;
   }
 
-  golsDoDia(chatId, dia) {
-    return Object.values(this.gols).filter((g) => g.chatId === chatId && g.dia === dia && !g.removido);
+  // gols que ainda aguardam votação: ficam guardados (sem expirar) até uma votação ser encerrada
+  golsPendentes(chatId) {
+    return Object.values(this.gols).filter((g) => {
+      if (g.chatId !== chatId || g.removido) return false;
+      if (!g.rodadaId) return true;
+      const r = this.rodadas[g.rodadaId];
+      return !r || r.status === 'aberta';
+    });
   }
 
   rodadaAberta(chatId) {
@@ -69,9 +75,8 @@ class Puskas {
       if (!g.arquivo) continue;
       const idadeDias = (hoje - g.em) / 86_400_000;
       const rodada = g.rodadaId ? this.rodadas[g.rodadaId] : null;
-      const ehVencedor = rodada && rodada.status === 'encerrada' && (rodada.vencedores || []).includes(g.id);
-      const emVotacao = rodada && rodada.status === 'aberta';
-      if (emVotacao) continue;
+      if (!rodada || rodada.status === 'aberta') continue; // ainda aguardando (ou em) votação: nunca apaga
+      const ehVencedor = rodada.status === 'encerrada' && (rodada.vencedores || []).includes(g.id);
       if (ehVencedor ? idadeDias > DIAS_GUARDAR_VENCEDORES : idadeDias > DIAS_GUARDAR_NAO_USADOS) this.apagarArquivo(g);
     }
   }
@@ -98,12 +103,12 @@ class Puskas {
   }
 
   ajuda(ctx) {
-    const n = this.golsDoDia(ctx.msg.chatId, this.hoje()).length;
+    const n = this.golsPendentes(ctx.msg.chatId).length;
     ctx.say(
       `🎯 *Prêmio Puskas*\n\n` +
       `Mande o *vídeo do seu gol* com a legenda */puskas* (ou responda ao vídeo com /puskas).\n` +
-      `Hoje já entraram ${n}/${MAX_POR_DIA} gols.\n\n` +
-      `/puskas lista — gols de hoje\n` +
+      `Já tem ${n}/${MAX_POR_DIA} gols esperando votação (eles ficam guardados até a votação acontecer).\n\n` +
+      `/puskas lista — gols esperando votação\n` +
       `/puskas remover N — tira um gol (o autor ou admin)\n` +
       `(admin) /iniciar puskas — mostra os gols e abre a votação\n` +
       `(admin) /encerrar puskas — apura o Gol Puskas do dia\n` +
@@ -120,48 +125,50 @@ class Puskas {
     const dia = this.hoje();
     this.limpar();
 
-    const repetido = Object.values(this.gols).find((g) => g.chatId === msg.chatId && g.videoId === v.id && !g.removido);
-    if (repetido) return say(`Esse vídeo já está na lista (gol #${repetido.num} de hoje).`);
+    const repetido = Object.values(this.gols).find((g) => {
+      if (g.chatId !== msg.chatId || g.videoId !== v.id || g.removido) return false;
+      const r = g.rodadaId ? this.rodadas[g.rodadaId] : null;
+      return !r || r.status === 'aberta'; // vídeo que já foi votado pode voltar a participar
+    });
+    if (repetido) return say(`Esse vídeo já está na lista (gol #${repetido.num}).`);
 
-    const hojeGols = this.golsDoDia(msg.chatId, dia);
-    if (hojeGols.length >= MAX_POR_DIA) {
+    const pendentes = this.golsPendentes(msg.chatId);
+    if (pendentes.length >= MAX_POR_DIA) {
       try { fs.unlinkSync(this.caminho(v.arquivo)); } catch (e) { /* ok */ }
-      return say(`🚫 Hoje já chegaram ${MAX_POR_DIA} gols, a lista está cheia. Tente amanhã!`);
+      return say(`🚫 A lista está cheia (${MAX_POR_DIA} gols esperando votação). Peça pro admin abrir a votação com /iniciarpuskas.`);
     }
 
     const autor = v.autor || msg.senderId;
-    const todosDoDia = Object.values(this.gols).filter((g) => g.chatId === msg.chatId && g.dia === dia);
-    const num = todosDoDia.reduce((m, g) => Math.max(m, g.num), 0) + 1;
+    const num = pendentes.reduce((m, g) => Math.max(m, g.num), 0) + 1;
     const id = this.store.novoId('puskasGol');
     this.gols[id] = {
       id, chatId: msg.chatId, dia, num, autor, videoId: v.id, arquivo: v.arquivo,
       em: this.agora(), rodadaId: null, removido: false,
     };
     say(
-      `🎯 *Gol registrado!* ${tag(autor)} — gol #${num} de hoje (${hojeGols.length + 1}/${MAX_POR_DIA})`,
+      `🎯 *Gol registrado!* ${tag(autor)} — gol #${num} (${pendentes.length + 1}/${MAX_POR_DIA})`,
       [autor]
     );
   }
 
   lista(ctx) {
     const { msg, say } = ctx;
-    const dia = this.hoje();
-    const gols = this.golsDoDia(msg.chatId, dia).sort((a, b) => a.num - b.num);
-    if (!gols.length) return say('Nenhum gol Puskas hoje ainda. Mande o vídeo com a legenda /puskas!');
+    const gols = this.golsPendentes(msg.chatId).sort((a, b) => a.num - b.num);
+    if (!gols.length) return say('Nenhum gol esperando votação. Mande o vídeo com a legenda /puskas!');
     const linhas = gols.map((g) => {
       const r = g.rodadaId ? this.rodadas[g.rodadaId] : null;
-      const sit = r ? (r.status === 'aberta' ? ' 🗳️ em votação' : r.status === 'encerrada' ? ' ✅ já votado' : '') : '';
+      const sit = r && r.status === 'aberta' ? ' 🗳️ em votação' : '';
       return `${g.num}) ${tag(g.autor)}${sit}`;
     });
-    say(`🎯 *Gols Puskas de hoje* (${gols.length}/${MAX_POR_DIA})\n\n${linhas.join('\n')}`, gols.map((g) => g.autor));
+    say(`🎯 *Gols esperando votação* (${gols.length}/${MAX_POR_DIA})\n\n${linhas.join('\n')}`, gols.map((g) => g.autor));
   }
 
   remover(ctx, args) {
     const { msg, say } = ctx;
     const n = parseInt(args, 10);
     if (!Number.isInteger(n)) return say('Use: /puskas remover N (o número do gol em /puskas lista).');
-    const g = this.golsDoDia(msg.chatId, this.hoje()).find((x) => x.num === n);
-    if (!g) return say(`Não achei o gol #${n} de hoje.`);
+    const g = this.golsPendentes(msg.chatId).find((x) => x.num === n);
+    if (!g) return say(`Não achei o gol #${n} na lista.`);
     if (!msg.isAdmin && g.autor !== msg.senderId) return say('Só o autor do gol ou um admin pode remover.');
     if (g.rodadaId && this.rodadas[g.rodadaId]?.status === 'aberta') return say('Esse gol já está na votação.');
     g.removido = true;
@@ -175,11 +182,11 @@ class Puskas {
     if (!this.exigeAdmin(ctx)) return;
     if (this.rodadaAberta(msg.chatId)) return say('Já tem uma votação do Puskas aberta. Use /encerrar puskas pra apurar (ou /puskas cancelar).');
     this.limpar();
-    const gols = this.golsDoDia(msg.chatId, this.hoje())
+    const gols = this.golsPendentes(msg.chatId)
       .filter((g) => !g.rodadaId && g.arquivo && fs.existsSync(this.caminho(g.arquivo)))
       .sort((a, b) => a.num - b.num);
     if (gols.length < 2) {
-      return say(`Precisa de pelo menos 2 gols pra votar (hoje: ${gols.length}). Mande o vídeo com a legenda /puskas.`);
+      return say(`Precisa de pelo menos 2 gols pra votar (na lista: ${gols.length}). Mande o vídeo com a legenda /puskas.`);
     }
     const id = this.store.novoId('puskasRodada');
     const rodada = {
@@ -194,7 +201,7 @@ class Puskas {
       `🎯 *PRÊMIO PUSKAS — ${this.dataBonita(rodada.dia)}*\n\n` +
       `🔒 Vou *fechar o grupo* enquanto mando os gols, pra ninguém atrapalhar. Depois eu abro de novo pra vocês votarem.\n\n` +
       `Como funciona:\n` +
-      `⚽ Vou mandar ${plural(gols.length, 'gol', 'gols')} de hoje, um de cada vez.\n` +
+      `⚽ Vou mandar ${plural(gols.length, 'gol', 'gols')}, um de cada vez.\n` +
       `🗳️ A votação é por *reação*: reaja no gol que você achou o mais bonito.\n` +
       `🔁 Se você reagir em outro gol, o seu voto *muda* — então reaja só no gol certo, o que você achou mais bonito de verdade!\n` +
       `🚫 Não vale votar no próprio gol.\n\n` +
@@ -321,7 +328,7 @@ class Puskas {
     const rodada = this.rodadaAberta(msg.chatId);
     if (!rodada) return say('Não tem votação do Puskas aberta.');
     rodada.status = 'cancelada';
-    rodada.gols.forEach((id) => { this.gols[id].rodadaId = null; }); // voltam pra lista de hoje
+    rodada.gols.forEach((id) => { this.gols[id].rodadaId = null; }); // voltam pra lista de espera
     say('🛑 Votação do Puskas cancelada. Os votos foram descartados, mas *os gols continuam na lista* (veja em /puskas lista). Use /iniciar puskas pra abrir a votação de novo.');
   }
 

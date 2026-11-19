@@ -52,7 +52,7 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 /pendentes
 
 *Prêmio Puskas (gol mais bonito do dia)*
-Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 por dia)
+Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 esperando votação; ficam guardados até a votação)
 (admin) /iniciar puskas — mostra os gols um a um; vote *reagindo* no vídeo
 (admin) /encerrar puskas — apura o Gol Puskas do dia
 (admin) /cancelarpuskas — cancela a votação mas mantém os gols (dá pra abrir de novo)

@@ -86,9 +86,9 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 
 ## Prêmio Puskas (gol mais bonito do dia)
 
-- O jogador manda o **vídeo do gol com a legenda `/puskas`** (ou responde ao vídeo com `/puskas`). Máximo de **10 gols por dia**; o 11º é recusado.
-- `/puskas lista` mostra os gols de hoje. `/puskas remover N` tira um gol (o autor ou admin).
-- **Admin:** `/iniciar puskas` fecha o grupo (só admins falam), explica como funciona e reenvia os gols de hoje, um de cada vez ("Gol 1 de N — gol do @fulano"), pedindo pra reagir no mais bonito. Depois reabre o grupo pra todos votarem. Precisa de pelo menos 2 gols. **O número do bot precisa ser admin do grupo** pra fechar/abrir (se não for, o bot avisa e segue sem fechar). Se o grupo já estava fechado, o bot não mexe nele.
+- O jogador manda o **vídeo do gol com a legenda `/puskas`** (ou responde ao vídeo com `/puskas`). Os gols **ficam guardados até acontecer uma votação** (não somem na virada do dia). Máximo de **10 gols esperando votação**; o 11º é recusado até o admin votar.
+- `/puskas lista` mostra os gols esperando votação. `/puskas remover N` tira um gol (o autor ou admin).
+- **Admin:** `/iniciar puskas` fecha o grupo (só admins falam), explica como funciona e reenvia os gols da lista, um de cada vez ("Gol 1 de N — gol do @fulano"), pedindo pra reagir no mais bonito. Depois reabre o grupo pra todos votarem. Precisa de pelo menos 2 gols. **O número do bot precisa ser admin do grupo** pra fechar/abrir (se não for, o bot avisa e segue sem fechar). Se o grupo já estava fechado, o bot não mexe nele.
 - A votação é por **reação**: cada pessoa reage (qualquer emoji) no vídeo do gol que achou mais bonito. 1 voto por pessoa (reagir em outro gol muda o voto; tirar a reação tira o voto). Não vale votar no próprio gol.
 - Plano B se a reação não funcionar: `/puskas votar N`.
 - **Admin:** `/encerrar puskas` apura, revela os autores, reenvia o vídeo vencedor e soma 1 Puskas pro autor ("@fulano agora tem 2 Puskas"). **A votação não fecha sozinha: o admin precisa mandar `/encerrar puskas`.** `/puskas hall` (ou `/puskas ranking`) mostra todo mundo que já ganhou, com a contagem, marcando as pessoas. Tudo fica salvo no volume. Em caso de empate, todos os empatados vencem. `/cancelarpuskas` (ou `/puskas cancelar`) cancela a votação e descarta os votos, **mas mantém os gols**: dá pra abrir de novo com `/iniciar puskas`.
