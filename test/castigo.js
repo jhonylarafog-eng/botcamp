@@ -169,5 +169,23 @@ async function diz(g, quem, texto, mentions = [], isAdmin = false) {
   const bot2 = new Bot(Object.assign(new Store(null), { data: salvo }), { agora: () => agora });
   assert.ok(bot2.castigo.daPessoa(CHAT, [X]), 'castigo continua depois de reiniciar');
 
+  // ---------- números do Brasil com/sem o 9 extra: a proteção vale pras duas formas ----------
+  {
+    const store5 = new Store(null);
+    const bot5 = new Bot(store5, { agora: () => agora, protegidos: ['5511977776666', '+55 21 98888-5555'] });
+    const c5 = bot5.castigo;
+    assert.ok(c5.ehProtegido(['5511977776666@s.whatsapp.net']), 'com o 9');
+    assert.ok(c5.ehProtegido(['551177776666@s.whatsapp.net']), 'sem o 9');
+    assert.ok(c5.ehProtegido(['5521988885555@s.whatsapp.net']), 'segunda pessoa, com o 9');
+    assert.ok(c5.ehProtegido(['552188885555:12@s.whatsapp.net']), 'segunda pessoa, sem o 9 (e com :dispositivo)');
+    assert.ok(!c5.ehProtegido(['5511977776667@s.whatsapp.net']), 'outro número não é protegido');
+    assert.ok(!c5.ehProtegido(['5521988885556@s.whatsapp.net']), 'outro número não é protegido (2)');
+    assert.ok(!c5.ehProtegido(['5511911110000@s.whatsapp.net']));
+    // castigo comum também reconhece a pessoa nas duas formas
+    store5.data.castigos = { 1: { id: 1, chatId: CHAT, alvo: '5511911110000@s.whatsapp.net', aliases: [], ate: agora + 1e6 } };
+    store5.data.castigos[2] = { id: 2, chatId: CHAT, alvo: '554188887777@s.whatsapp.net', aliases: [], ate: agora + 1e6 };
+    assert.ok(c5.daPessoa(CHAT, ['5541988887777@s.whatsapp.net']), 'achou o castigado mesmo com o 9 a mais');
+  }
+
   console.log('\n✅ CASTIGO: TODOS OS TESTES PASSARAM');
 })().catch((e) => { console.error(e); process.exit(1); });

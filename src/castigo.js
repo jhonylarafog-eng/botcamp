@@ -12,12 +12,22 @@ const FUSO = 'America/Sao_Paulo';
 const tag = (id) => `@${id.split('@')[0].split(':')[0]}`;
 const usuario = (id) => String(id || '').split('@')[0].split(':')[0];
 
+// Números do Brasil aparecem no WhatsApp com ou sem o 9 extra do celular (551177776666 e 5511977776666 são a
+// mesma pessoa). Devolve as duas formas pra comparar sem errar.
+function variantes(num) {
+  const n = String(num || '').replace(/\D/g, '');
+  const out = new Set([n]);
+  if (/^55\d{2}9\d{8}$/.test(n)) out.add(n.slice(0, 4) + n.slice(5)); // tira o 9
+  else if (/^55\d{2}[6-9]\d{7}$/.test(n)) out.add(n.slice(0, 4) + '9' + n.slice(4)); // põe o 9
+  return [...out];
+}
+
 class Castigo {
   constructor(store, { agora = () => Date.now(), protegidos = [] } = {}) {
     this.store = store;
     this.agora = agora;
     // números blindados (só dígitos, com DDI): ninguém consegue castigar essas pessoas
-    this.protegidos = new Set((protegidos || []).map((n) => String(n).replace(/\D/g, '')).filter(Boolean));
+    this.protegidos = new Set((protegidos || []).flatMap(variantes).filter(Boolean));
     store.data.castigos ||= {};
   }
 
@@ -38,13 +48,13 @@ class Castigo {
 
   // a pessoa (qualquer um dos ids dela) está de castigo neste grupo?
   daPessoa(chatId, ids) {
-    const alvo = new Set((ids || []).map(usuario));
-    return this.ativosDoChat(chatId).find((c) => [c.alvo, ...(c.aliases || [])].some((x) => alvo.has(usuario(x)))) || null;
+    const alvo = new Set((ids || []).flatMap((i) => variantes(usuario(i))));
+    return this.ativosDoChat(chatId).find((c) => [c.alvo, ...(c.aliases || [])].some((x) => variantes(usuario(x)).some((v) => alvo.has(v)))) || null;
   }
 
   // algum dos ids (número, LID...) é de uma pessoa blindada?
   ehProtegido(ids) {
-    return (ids || []).some((i) => this.protegidos.has(usuario(i)));
+    return (ids || []).some((i) => variantes(usuario(i)).some((v) => this.protegidos.has(v)));
   }
 
   guardarAliases(id, aliases) {
