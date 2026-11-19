@@ -56,6 +56,7 @@ Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 esperando votação;
 (admin) /iniciar puskas — mostra os gols um a um; vote *reagindo* no vídeo
 (admin) /encerrar puskas — apura o Gol Puskas do dia
 (admin) /cancelarpuskas — cancela a votação mas mantém os gols (dá pra abrir de novo)
+(admin) /limparpuskas — apaga só os vídeos de vencedores com mais de 60 dias (o hall nunca é apagado)
 /puskas lista · /puskas hall (ou tudo junto: /puskaslista /puskashall /puskasremover2 /puskasvotar3)
 
 *Castigo (admin)*
@@ -131,8 +132,10 @@ class Bot {
   comando(ctx, cmd, args, camp) {
     const { say, msg } = ctx;
     // Puskas tudo junto: /puskaslista, /puskashall, /puskasremover2, /puskasvotar3, /votarpuskas3
-    const junto = cmd.match(/^puskas(lista|hall|ranking|ganhadores|vencedores|remover|remove|apagar|votar|voto|iniciar|abrir|encerrar|apurar|cancelar)(\d*)$/);
+    const junto = cmd.match(/^puskas(lista|hall|ranking|ganhadores|vencedores|remover|remove|apagar|votar|voto|iniciar|abrir|encerrar|apurar|cancelar|limpar)(\d*)$/);
     if (junto) return this.puskas.comando(ctx, `${junto[1]} ${junto[2]} ${args}`.trim());
+    const limparJunto = cmd.match(/^limparpuskas(confirmar)?$/);
+    if (limparJunto) return this.puskas.limpar_vencedores(ctx, limparJunto[1] || args);
     const votarJunto = cmd.match(/^votarpuskas(\d+)$/);
     if (votarJunto) return this.puskas.votarTexto(ctx, votarJunto[1]);
     switch (cmd) {

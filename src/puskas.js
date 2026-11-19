@@ -12,7 +12,7 @@ const { norm } = require('./text');
 
 const MAX_POR_DIA = 10;
 const DIAS_GUARDAR_NAO_USADOS = 3;
-const DIAS_GUARDAR_VENCEDORES = 30;
+const DIAS_LIMPAR_VENCEDORES = 60; // só vídeos de vencedores com mais de 60 dias podem ser apagados (e só por um admin)
 const FUSO = 'America/Sao_Paulo';
 
 const tag = (id) => `@${id.split('@')[0]}`;
@@ -77,7 +77,8 @@ class Puskas {
       const rodada = g.rodadaId ? this.rodadas[g.rodadaId] : null;
       if (!rodada || rodada.status === 'aberta') continue; // ainda aguardando (ou em) votação: nunca apaga
       const ehVencedor = rodada.status === 'encerrada' && (rodada.vencedores || []).includes(g.id);
-      if (ehVencedor ? idadeDias > DIAS_GUARDAR_VENCEDORES : idadeDias > DIAS_GUARDAR_NAO_USADOS) this.apagarArquivo(g);
+      if (ehVencedor) continue; // vídeo de vencedor nunca é apagado sozinho: só com /limparpuskas (decisão do admin)
+      if (idadeDias > DIAS_GUARDAR_NAO_USADOS) this.apagarArquivo(g);
     }
   }
 
@@ -96,6 +97,7 @@ class Puskas {
       case 'iniciar': case 'abrir': return this.iniciar(ctx);
       case 'encerrar': case 'apurar': return this.encerrar(ctx);
       case 'cancelar': return this.cancelar(ctx);
+      case 'limpar': return this.limpar_vencedores(ctx, resto);
       case 'hall': case 'ranking': case 'ganhadores': case 'vencedores': return this.hall(ctx);
       case 'votar': case 'voto': return this.votarTexto(ctx, resto);
       default: return say('Não entendi. Mande o *vídeo do gol* com a legenda */puskas* (ou responda ao vídeo com /puskas).');
@@ -113,8 +115,47 @@ class Puskas {
       `(admin) /iniciar puskas — mostra os gols e abre a votação\n` +
       `(admin) /encerrar puskas — apura o Gol Puskas do dia\n` +
       `(admin) /cancelarpuskas — cancela a votação e mantém os gols\n` +
+      `(admin) /limparpuskas — apaga só os vídeos de vencedores com mais de ${DIAS_LIMPAR_VENCEDORES} dias (o hall fica)\n` +
       `/puskas hall — quem já ganhou Puskas`
     );
+  }
+
+  // vídeos de vencedores com mais de 60 dias (o registro no hall nunca é apagado, só o vídeo)
+  videosAntigosDeVencedores(chatId) {
+    const limite = this.agora() - DIAS_LIMPAR_VENCEDORES * 86_400_000;
+    const achados = [];
+    for (const r of Object.values(this.rodadas)) {
+      if (r.chatId !== chatId || r.status !== 'encerrada' || (r.encerradaEm || 0) > limite) continue;
+      for (const id of r.vencedores || []) {
+        const g = this.gols[id];
+        if (!g || !g.arquivo) continue;
+        let bytes = 0;
+        try { bytes = fs.statSync(this.caminho(g.arquivo)).size; } catch (e) { /* arquivo já não existe */ }
+        achados.push({ g, r, bytes });
+      }
+    }
+    return achados;
+  }
+
+  // /limparpuskas — (admin) mostra o que dá pra apagar; /limparpuskas confirmar apaga só os VÍDEOS
+  limpar_vencedores(ctx, args) {
+    const { msg, say } = ctx;
+    if (!this.exigeAdmin(ctx)) return;
+    const achados = this.videosAntigosDeVencedores(msg.chatId);
+    if (!achados.length) {
+      return say(`🧹 Nada pra limpar: não tem vídeo de vencedor com mais de ${DIAS_LIMPAR_VENCEDORES} dias guardado. O hall continua intacto.`);
+    }
+    const mb = achados.reduce((t, a) => t + a.bytes, 0) / 1048576;
+    if (norm(args).replace(/ /g, '') !== 'confirmar') {
+      return say(
+        `🧹 *Limpar vídeos antigos do Puskas*\n\n` +
+        `Dá pra apagar ${plural(achados.length, 'vídeo', 'vídeos')} de vencedores com mais de ${DIAS_LIMPAR_VENCEDORES} dias (~${mb.toFixed(1)} MB).\n` +
+        `✅ O *hall* e a contagem de Puskas de cada pessoa *não mudam*; só o arquivo do vídeo é apagado.\n\n` +
+        `Pra apagar, mande: */limparpuskas confirmar*`
+      );
+    }
+    achados.forEach((a) => this.apagarArquivo(a.g));
+    say(`🧹 ${plural(achados.length, 'vídeo apagado', 'vídeos apagados')} (~${mb.toFixed(1)} MB liberados). O hall continua intacto.`);
   }
 
   // ---------- registrar um gol ----------

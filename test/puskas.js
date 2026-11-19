@@ -186,6 +186,21 @@ reage(U(90), 'B4-1');
 diz(ADMIN, '/encerrar puskas', {}, true);
 assert.match(diz(U(1), '/puskas lista').t, /Nenhum gol esperando votação/); // depois de votado, a lista zera
 
+// ---------- vencedores: o vídeo nunca some sozinho; só o admin apaga (/limparpuskas) ----------
+assert.ok(arquivoExiste(velho.arquivo), 'o vídeo do vencedor fica guardado');
+assert.match(diz(ADMIN, '/limparpuskas', {}, true).t, /Nada pra limpar/); // ainda é recente
+agora += 70 * 86_400_000; // ~2 meses e meio depois
+gol(U(95)); // dispara a limpeza automática: não pode apagar vídeo de vencedor
+assert.ok(arquivoExiste(velho.arquivo), 'vídeo de vencedor não é apagado automaticamente');
+assert.match(diz(U(1), '/limparpuskas').t, /Só admin/);
+const prev = diz(ADMIN, '/limparpuskas', {}, true).t;
+assert.match(prev, /Dá pra apagar \d+ vídeos? de vencedores com mais de 60 dias[\s\S]*\/limparpuskas confirmar/);
+assert.ok(arquivoExiste(velho.arquivo), 'sem confirmar, nada é apagado');
+assert.match(diz(ADMIN, '/limparpuskasconfirmar', {}, true).t, /apagados?/);
+assert.ok(!arquivoExiste(velho.arquivo), 'depois de confirmar o vídeo é apagado');
+assert.match(diz(U(1), '/puskas hall').t, /Quem já ganhou/); // o hall continua intacto
+assert.match(diz(ADMIN, '/puskas limpar', {}, true).t, /Nada pra limpar/);
+
 // a Bola de Ouro foi removida: /encerrar sozinho e os comandos dela não fazem nada
 for (const c of ['/encerrar', '/bolaouro Temporada 1', '/votar @a @b @c', '/votos', '/hall', '/cancelarvotacao']) {
   assert.strictEqual(diz(ADMIN, c, {}, true).t, '', `${c} deveria ser ignorado`);

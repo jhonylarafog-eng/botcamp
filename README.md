@@ -92,7 +92,7 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 - A votação é por **reação**: cada pessoa reage (qualquer emoji) no vídeo do gol que achou mais bonito. 1 voto por pessoa (reagir em outro gol muda o voto; tirar a reação tira o voto). Não vale votar no próprio gol.
 - Plano B se a reação não funcionar: `/puskas votar N`.
 - **Admin:** `/encerrar puskas` apura, revela os autores, reenvia o vídeo vencedor e soma 1 Puskas pro autor ("@fulano agora tem 2 Puskas"). **A votação não fecha sozinha: o admin precisa mandar `/encerrar puskas`.** `/puskas hall` (ou `/puskas ranking`) mostra todo mundo que já ganhou, com a contagem, marcando as pessoas. Tudo fica salvo no volume. Em caso de empate, todos os empatados vencem. `/cancelarpuskas` (ou `/puskas cancelar`) cancela a votação e descarta os votos, **mas mantém os gols**: dá pra abrir de novo com `/iniciar puskas`.
-- Os vídeos ficam em `DATA_DIR/puskas`. Os que não ganham são apagados na apuração; sobras antigas são apagadas depois de 3 dias.
+- Os vídeos ficam em `DATA_DIR/puskas`. Os que não ganham são apagados na apuração. **O hall e os vídeos dos vencedores nunca são apagados sozinhos.** Pra economizar espaço, um admin pode usar `/limparpuskas` (mostra quanto dá pra liberar) e `/limparpuskas confirmar`, que apaga só os *vídeos* de vencedores com mais de 60 dias; o hall e a contagem de Puskas ficam.
 
 ## Castigo (tirar o admin por 24h)
 
