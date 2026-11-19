@@ -6,7 +6,6 @@ const { COMPETICOES, MODOS } = require('./clubs');
 const { norm, acharClube } = require('./text');
 const rank = require('./rankings');
 const { Contagem } = require('./contagem');
-const { Votacao } = require('./votacao');
 const { Puskas } = require('./puskas');
 const { Castigo } = require('./castigo');
 
@@ -52,14 +51,6 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 /artilheiros ou /assistencias — lista com todos, por participações
 /pendentes
 
-*Bola de Ouro (votação)*
-(admin) /bolaouro Temporada 1 — abre a votação
-/votar @1º @2º @3º — vota nos 3 melhores (5, 3 e 1 pontos)
-/votos — quem votou, quem falta e a parcial
-(admin) /encerrar — apura e anuncia o campeão
-(admin) /cancelarvotacao — descarta
-/hall — campeões anteriores
-
 *Prêmio Puskas (gol mais bonito do dia)*
 Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 por dia)
 (admin) /iniciar puskas — mostra os gols um a um; vote *reagindo* no vídeo
@@ -83,7 +74,6 @@ class Bot {
     this.puskas = new Puskas(store, { prefix, dataDir, agora });
     this.castigo = new Castigo(store, { agora, protegidos });
     this.contagem = new Contagem(store, { prefix });
-    this.votacao = new Votacao(store, this.contagem);
   }
 
   // ---------- entrada ----------
@@ -204,16 +194,10 @@ class Bot {
         return this.contagem.removerStats(ctx, parseInt(m[1], 10), m[2].startsWith('gol') ? 'gols' : 'assist');
       }
       case 'pendentes': return this.contagem.pendentes(ctx);
-      // Bola de Ouro (votação)
-      case 'bolaouro': case 'bolaodeouro': case 'votacao': return this.votacao.abrir(ctx, args);
-      case 'votar': case 'voto': return this.votacao.votar(ctx, args);
-      case 'votos': return this.votacao.votos(ctx);
       case 'encerrar':
         if (norma(args) === 'puskas') return this.puskas.encerrar(ctx);
-        return this.votacao.encerrar(ctx);
+        return;
       case 'encerrarpuskas': return this.puskas.encerrar(ctx);
-      case 'cancelarvotacao': return this.votacao.cancelar(ctx);
-      case 'hall': return this.votacao.hall(ctx);
       default: {
         // /remover3gol @fulano  e  /remover5assistencia @fulano
         const m = cmd.match(/^remover(\d{1,3})(gols?|assistencias?)$/);

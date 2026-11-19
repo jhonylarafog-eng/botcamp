@@ -176,7 +176,9 @@ agora += 5 * 86_400_000;
 gol(U(71)); // dispara a limpeza
 assert.ok(!arquivoExiste(velho.arquivo), 'vídeo velho deveria ter sido apagado');
 
-// os comandos antigos continuam separados do Puskas
-assert.match(diz(ADMIN, '/encerrar', {}, true).t, /Não tem votação|votação/i);
+// a Bola de Ouro foi removida: /encerrar sozinho e os comandos dela não fazem nada
+for (const c of ['/encerrar', '/bolaouro Temporada 1', '/votar @a @b @c', '/votos', '/hall', '/cancelarvotacao']) {
+  assert.strictEqual(diz(ADMIN, c, {}, true).t, '', `${c} deveria ser ignorado`);
+}
 
 console.log('\n✅ PUSKAS: TODOS OS TESTES PASSARAM');

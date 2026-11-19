@@ -27,13 +27,6 @@ Admins do grupo (ou quem iniciou o campeonato) podem usar `/comecar`, `/cancelar
 
 Consultas: `/artilheiros` ou `/assistencias` (mesma lista: todos marcados, por participações = gols + assistências), `/pendentes`.
 
-## Bola de Ouro (votação)
-
-1. Um admin abre com `/bolaouro Temporada 1`. Os candidatos são os jogadores que têm partida registrada (`/artilheiros`).
-2. Cada candidato vota nos **3 melhores**, em ordem: `/votar @1º @2º @3º` (ou pelos nomes: `/votar ana, bia, caio`). O 1º vale 5 pontos, o 2º vale 3 e o 3º vale 1. Não vale votar em si mesmo, e dá pra mudar o voto votando de novo.
-3. O voto é **aberto**: o bot mostra no grupo cada voto. `/votos` mostra quem votou, quem falta e a parcial.
-4. O admin encerra com `/encerrar`: o bot apura (desempate por mais 1º lugares, depois mais 2º), anuncia o campeão e guarda no `/hall`. `/cancelarvotacao` descarta.
-
 ## Variáveis de ambiente
 
 | Variável | Para quê |
