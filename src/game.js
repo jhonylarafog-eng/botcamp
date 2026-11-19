@@ -65,7 +65,7 @@ Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 por dia)
 (admin) /iniciar puskas — mostra os gols um a um; vote *reagindo* no vídeo
 (admin) /encerrar puskas — apura o Gol Puskas do dia
 (admin) /cancelarpuskas — cancela a votação mas mantém os gols (dá pra abrir de novo)
-/puskas lista · /puskas hall
+/puskas lista · /puskas hall (ou tudo junto: /puskaslista /puskashall /puskasremover2 /puskasvotar3)
 
 *Castigo (admin)*
 (admin) /castigo @fulano — tira o admin por 24h e ninguém consegue promover de novo (não dá pra desfazer)
@@ -140,6 +140,11 @@ class Bot {
 
   comando(ctx, cmd, args, camp) {
     const { say, msg } = ctx;
+    // Puskas tudo junto: /puskaslista, /puskashall, /puskasremover2, /puskasvotar3, /votarpuskas3
+    const junto = cmd.match(/^puskas(lista|hall|ranking|ganhadores|vencedores|remover|remove|apagar|votar|voto|iniciar|abrir|encerrar|apurar|cancelar)(\d*)$/);
+    if (junto) return this.puskas.comando(ctx, `${junto[1]} ${junto[2]} ${args}`.trim());
+    const votarJunto = cmd.match(/^votarpuskas(\d+)$/);
+    if (votarJunto) return this.puskas.votarTexto(ctx, votarJunto[1]);
     switch (cmd) {
       case 'ajuda': case 'comandos': case 'help': case 'menu':
         return say(AJUDA);

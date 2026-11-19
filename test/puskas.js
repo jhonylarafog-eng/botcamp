@@ -103,6 +103,14 @@ assert.strictEqual(Object.keys(rodada.votos).length, 5);
 // fallback por texto
 assert.match(diz(U(57), '/puskas votar 3').t, /Voto registrado no gol 3/);
 assert.match(diz(U(57), '/puskas votar 99').t, /de 1 a 10/);
+// tudo junto, sem espaço
+assert.match(diz(U(57), '/puskasvotar4').t, /Voto registrado no gol 4/);
+assert.match(diz(U(57), '/votarpuskas5').t, /Voto registrado no gol 5/);
+assert.match(diz(U(57), '/puskasvotar 3').t, /Voto registrado no gol 3/);
+assert.match(diz(U(57), '/puskaslista').t, /Gols Puskas de hoje/);
+assert.match(diz(U(57), '/puskasvotar99').t, /de 1 a 10/);
+assert.match(diz(U(1), '/puskashall').t, /Hall do Puskas|Ainda não|Nenhum/);
+assert.match(diz(U(57), '/puskas votar 3').t, /Voto registrado no gol 3/); // volta pro voto original
 assert.match(diz(autorDoGol(2), '/votarpuskas 2').t, /próprio gol/);
 
 // ---------- apuração ----------
