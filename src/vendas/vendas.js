@@ -455,7 +455,7 @@ function criarVendas(opcoes = {}) {
         linha = t ? `[áudio do cliente] ${t}` : '[áudio do cliente que não foi possível ouvir]';
         if (t) chat.parar = PARAR.test(t);
       } else if (c.tipo === 'imagem') {
-        linha = `[comprovante/imagem do cliente]${c.texto ? ' ' + c.texto : ''}`;
+        linha = `[imagem enviada pelo cliente]${c.texto ? ' ' + c.texto : ''}`;
         try {
           const buf = baixar ? await baixar(m, sock) : null;
           const mime = /^image\/(jpeg|png|gif|webp)$/.test(c.mime || '') ? c.mime : 'image/jpeg';

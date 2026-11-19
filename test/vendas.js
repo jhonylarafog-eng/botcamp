@@ -302,7 +302,8 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     await esperar();
     const partes = chamadas.gemini[0].corpo.contents[0].parts;
     assert.strictEqual(partes[0].inlineData.mimeType, 'image/jpeg');
-    assert.ok(partes[1].text.includes('comprovante'));
+    assert.ok(partes[1].text.includes('imagem enviada pelo cliente'));
+    assert.ok(!partes[1].text.includes('comprovante'));
   });
   await teste('Gemini: pagamento avisa no Telegram igual ao Claude', async () => {
     const { v, sock, chamadas } = montar({ env: SO_GEMINI, respostas: ['Recebi, vou conferir!\n[[PAGAMENTO|vídeo 17s R$31]]'] });
@@ -325,6 +326,24 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(pr.includes('na MESMA resposta'));
     assert.ok(pr.includes('Se o pedido não envolve fotos'));
     assert.ok(pr.includes('se ainda falta algum material'));
+  });
+  await teste('manual: imagem pode ser material ou comprovante e o atendente reconhece e segue o fluxo', async () => {
+    const pr = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
+    assert.ok(pr.includes('Imagens e arquivos que o cliente manda'));
+    assert.ok(pr.includes('QUALQUER momento'));
+    assert.ok(pr.includes('Não trate toda imagem como comprovante'));
+    assert.ok(pr.includes('[imagem enviada pelo cliente]'));
+    assert.ok(!pr.includes('[comprovante/imagem do cliente]'));
+  });
+  await teste('foto antes do pagamento não vira "comprovante" no histórico', async () => {
+    const { v, sock, chamadas } = montar({ respostas: ['Que foto bacana! Vai ficar legal.', 'Fechado!'] });
+    await v.receber(sock, msgImagem());
+    await esperar();
+    await v.receber(sock, msgTexto('pode fechar'));
+    await esperar();
+    const hist = JSON.stringify(chamadas.claude[1].messages);
+    assert.ok(hist.includes('imagem enviada pelo cliente'));
+    assert.ok(!hist.includes('comprovante'));
   });
   await teste('conversa salva em disco e recarregada', async () => {
     const a = montar();
