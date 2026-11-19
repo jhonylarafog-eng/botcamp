@@ -319,6 +319,13 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(chamadas.telegram[0].text.includes('GEMINI_API_KEY'));
   });
 
+  await teste('manual: pede só o material necessário depois do "paguei", na mesma resposta', async () => {
+    const pr = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
+    assert.ok(pr.includes('Material do pedido'));
+    assert.ok(pr.includes('na MESMA resposta'));
+    assert.ok(pr.includes('Se o pedido não envolve fotos'));
+    assert.ok(pr.includes('se ainda falta algum material'));
+  });
   await teste('conversa salva em disco e recarregada', async () => {
     const a = montar();
     await a.v.receber(a.sock, msgTexto('oi'));
