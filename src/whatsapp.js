@@ -21,6 +21,7 @@ const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Brow
 const { Store } = require('./store');
 const { Bot } = require('./game');
 const { criarVigia } = require('./castigo_wa');
+const { criarVendas } = require('./vendas/vendas');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'dados');
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -206,6 +207,14 @@ async function enviarRespostas(sock, respostas) {
   }
 }
 
+// atendente de vendas do Estúdio Digital (só conversas privadas; desligado se VENDAS_ATIVO != sim)
+const vendas = criarVendas({
+  dataDir: DATA_DIR,
+  lembrarEnviado,
+  gerarId: () => (baileys.generateMessageIDV2 || baileys.generateMessageID)(sockAtual?.user?.id),
+  baixar: (m, sock) => downloadMediaMessage(m, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }),
+});
+
 const vigia = criarVigia({ bot, store, lembrarEnviado });
 const { aplicarCastigo, varrerCastigos, varrerTodos } = vigia;
 const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -214,7 +223,12 @@ async function processar(sock, m) {
   if (!m.message) return;
   if (m.key.fromMe && enviados.has(m.key.id)) return;
   const chatId = m.key.remoteJid;
-  if (!chatId || !chatId.endsWith('@g.us')) return; // só funciona em grupos
+  // conversa privada: só o atendente de vendas (se ligado com VENDAS_ATIVO=sim). Grupos não passam por aqui.
+  if (vendas.ativo && vendas.ehPrivado(chatId)) {
+    vendas.receber(sock, m).catch((e) => console.error('[vendas] erro:', e.message));
+    return;
+  }
+  if (!chatId || !chatId.endsWith('@g.us')) return; // o bot do campeonato só funciona em grupos
   const meuId = sock.user?.id ? jidNormalizedUser(sock.user.id) : null;
   const senderId = m.key.participant || m.participant || (m.key.fromMe ? meuId : null);
   if (!senderId) return;
@@ -394,5 +408,5 @@ setInterval(() => {
   if (sockAtual && estado.conectado) varrerTodos(sockAtual).catch(() => {});
 }, 2 * 60_000).unref();
 
-process.on('SIGTERM', () => { store.salvarAgora(); process.exit(0); });
+process.on('SIGTERM', () => { store.salvarAgora(); vendas.salvarAgora(); process.exit(0); });
 process.on('unhandledRejection', (e) => console.error('unhandledRejection:', e));
