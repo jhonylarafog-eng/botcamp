@@ -218,7 +218,7 @@ const vendas = criarVendas({
 vendas.iniciarLembretes();
 
 const vigia = criarVigia({ bot, store, lembrarEnviado });
-const { aplicarCastigo, varrerCastigos, varrerTodos } = vigia;
+const { aplicarCastigo, varrerCastigos, varrerTodos, vigiarDarAdmin } = vigia;
 const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
 async function processar(sock, m) {
@@ -246,6 +246,9 @@ async function processar(sock, m) {
 
   const { text, temImagem, mentions, quoted } = extrair(m.message);
   if (!text && !temImagem) return;
+
+  // castigo: se alguém mandar o comando do outro bot pra dar admin a quem está de castigo, a gente tira de volta
+  vigiarDarAdmin(sock, { chatId, text, mentions, quoted });
 
   const comando = text.trim().startsWith(PREFIX);
   // o dono da conta (quando ele mesmo digita) sempre é admin do bot

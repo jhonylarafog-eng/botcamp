@@ -14,7 +14,7 @@ let agora = new Date('2026-11-18T19:00:00-03:00').getTime();
 const store = new Store(null);
 const PROTEGIDO = '5511933330000@s.whatsapp.net';
 const bot = new Bot(store, { agora: () => agora, protegidos: ['5511933330000'] });
-const vigia = criarVigia({ bot, store });
+const vigia = criarVigia({ bot, store, esperar: async () => {} });
 
 function grupoFalso(participantes) {
   const g = {
@@ -34,13 +34,14 @@ const promover = (g, id) => { g.participants.find((p) => p.id === id).admin = 'a
 const ultima = (g) => g.msgs[g.msgs.length - 1]?.text || '';
 
 async function diz(g, quem, texto, mentions = [], isAdmin = false) {
+  const antes = g.msgs.length;
   const r = bot.handle({ chatId: CHAT, senderId: quem, senderName: 'x', text: texto, isAdmin, mentions });
   const textos = [];
   for (const it of r) {
     if (it.castigo) await vigia.aplicarCastigo(g, CHAT, it.castigo);
     else textos.push(it.text);
   }
-  const t = [...textos, ...(r.some((i) => i.castigo) ? [ultima(g)] : [])].join('\n---\n');
+  const t = [...textos, ...(r.some((i) => i.castigo) ? g.msgs.slice(antes).map((m) => m.text) : [])].join('\n---\n');
   console.log(`\n[${quem.split('@')[0]}] ${texto}\n${t.split('\n').map((l) => '  ‹ ' + l).join('\n')}`);
   return t;
 }
@@ -127,6 +128,27 @@ async function diz(g, quem, texto, mentions = [], isAdmin = false) {
   assert.strictEqual(g4.chamadas.length, 0);
   assert.strictEqual(g4.participants.find((p) => p.id === LP).admin, 'admin');
   assert.strictEqual(bot.castigo.daPessoa(CHAT, [PROTEGIDO]), null);
+
+  // ---------- outro bot: o castigo manda o comando de tirar o admin dele ----------
+  const tirar = g.msgs.filter((m) => m.text === '/removeadmin @5511911110000');
+  assert.strictEqual(tirar.length, 1, 'ao aplicar o castigo manda /removeadmin @pessoa');
+  assert.deepStrictEqual(tirar[0].mentions, [X]);
+
+  // ---------- alguém tenta dar admin (no outro bot) a quem está de castigo: a gente tira de volta ----------
+  const qtd = () => g.msgs.filter((m) => m.text === '/removeadmin @5511911110000').length;
+  const antes1 = qtd();
+  await vigia.vigiarDarAdmin(g, { chatId: CHAT, text: '/addadmin @5511911110000', mentions: [X] });
+  assert.strictEqual(qtd(), antes1 + 1, 'marcação: manda /removeadmin de volta');
+  assert.match(ultima(g), /está de castigo até .* não pode ser admin\. Tirei o admin de novo/);
+  await vigia.vigiarDarAdmin(g, { chatId: CHAT, text: '/addadmin @5511911110000', mentions: [X] });
+  assert.strictEqual(qtd(), antes1 + 1, 'em rajada (menos de 5s) não repete');
+  await vigia.vigiarDarAdmin(g, { chatId: CHAT, text: '/ADDADMIN', mentions: [], quoted: { senderId: X } });
+  // (a trava de rajada ainda vale aqui; confere que não quebrou)
+  const y0 = g.msgs.length;
+  await vigia.vigiarDarAdmin(g, { chatId: CHAT, text: '/addadmin @5511922220000', mentions: [Y] }); // Y não está de castigo
+  await vigia.vigiarDarAdmin(g, { chatId: CHAT, text: 'oi /addadmin @5511911110000', mentions: [X] }); // não é comando
+  await vigia.vigiarDarAdmin(g, { chatId: CHAT, text: '/addadministrador @5511911110000', mentions: [X] }); // outro comando
+  assert.strictEqual(g.msgs.length, y0, 'só reage ao comando certo e só pra quem está de castigo');
 
   // ---------- 24 horas depois o castigo acaba sozinho ----------
   agora += 22 * 3_600_000; // já passou 1h + 22h = 23h desde o início

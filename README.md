@@ -99,6 +99,7 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 - **Admin:** `/castigo @fulano` tira o admin da pessoa por **24 horas**. `/castigos` mostra quem está de castigo e quanto falta.
 - **Não dá pra perdoar nem renovar:** o castigo dura exatamente 24h. Castigar de novo quem já está de castigo só mostra quanto falta.
 - Durante o castigo, **ninguém consegue promover a pessoa de novo** (nem manualmente, nem por outro bot): quando o WhatsApp avisa que ela virou admin, o bot tira o admin na hora e avisa o grupo. Há também uma conferência a cada 2 minutos e ao reconectar, caso algum aviso se perca.
+- **Outro bot (o que puxa campeonato):** ao castigar, o bot também manda no grupo `/removeadmin @fulano` pra tirar a pessoa da lista de admins daquele bot. Se alguém mandar `/addadmin` marcando (ou respondendo) quem está de castigo, o bot espera 3 segundos e manda `/removeadmin` de novo. Os comandos podem ser trocados com as variáveis `CMD_TIRAR_ADMIN_OUTRO_BOT` e `CMD_DAR_ADMIN_OUTRO_BOT`. Limite: só percebe o `/addadmin` quando alguém manda a mensagem; se o outro bot der admin por outro caminho, o bot não vê.
 - Depois de 24h o castigo acaba sozinho (o bot não promove ninguém; um admin pode promover de novo).
 - **Números blindados:** a variável `PROTEGIDOS` (números separados por vírgula, só dígitos com DDI, ex.: `5511999998888,5511988887777`) lista quem **não pode ser castigado**.
 - **O número do bot precisa ser admin do grupo.** O bot não consegue rebaixar a dona (criadora) do grupo.
