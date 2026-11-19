@@ -345,10 +345,11 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(hist.includes('imagem enviada pelo cliente'));
     assert.ok(!hist.includes('comprovante'));
   });
-  await teste('manual: cliente que pergunta o preço antes da duração recebe a faixa R$30–R$100', async () => {
+  await teste('manual: cliente que pergunta o preço antes de explicar o vídeo recebe a faixa R$30–R$120', async () => {
     const pr = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
-    assert.ok(pr.includes('ANTES de saber a duração') || pr.includes('ANTES de você saber a duração'));
-    assert.ok(pr.includes('entre R$30 e R$100'));
+    assert.ok(pr.includes('ANTES de você saber o que ele quer'));
+    assert.ok(pr.includes('entre R$30 e R$120'));
+    assert.ok(pr.includes('eu consigo te passar um valor mais exato'));
     assert.ok(pr.includes('mais de 3 minutos'));
     assert.ok(!pr.includes('nem faixas de preço'));
   });
