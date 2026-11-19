@@ -107,6 +107,7 @@ class Puskas {
       `/puskas remover N — tira um gol (o autor ou admin)\n` +
       `(admin) /iniciar puskas — mostra os gols e abre a votação\n` +
       `(admin) /encerrar puskas — apura o Gol Puskas do dia\n` +
+      `(admin) /cancelarpuskas — cancela a votação e mantém os gols\n` +
       `/puskas hall — quem já ganhou Puskas`
     );
   }
@@ -321,7 +322,7 @@ class Puskas {
     if (!rodada) return say('Não tem votação do Puskas aberta.');
     rodada.status = 'cancelada';
     rodada.gols.forEach((id) => { this.gols[id].rodadaId = null; }); // voltam pra lista de hoje
-    say('🛑 Votação do Puskas cancelada. Os gols continuam na lista; use /iniciar puskas pra abrir de novo.');
+    say('🛑 Votação do Puskas cancelada. Os votos foram descartados, mas *os gols continuam na lista* (veja em /puskas lista). Use /iniciar puskas pra abrir a votação de novo.');
   }
 
   // lista de quem já ganhou Puskas (todos, com a contagem) + últimos vencedores

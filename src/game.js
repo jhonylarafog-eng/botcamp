@@ -63,6 +63,7 @@ Mande o *print* do fim da partida e escreva: _fiz 2 gols, dei 1 assistência_
 Mande o *vídeo do seu gol* com a legenda /puskas (máx. 10 por dia)
 (admin) /iniciar puskas — mostra os gols um a um; vote *reagindo* no vídeo
 (admin) /encerrar puskas — apura o Gol Puskas do dia
+(admin) /cancelarpuskas — cancela a votação mas mantém os gols (dá pra abrir de novo)
 /puskas lista · /puskas hall
 
 *Castigo (admin)*
@@ -145,6 +146,7 @@ class Bot {
         if (norma(args.split(/\s+/)[0]) === 'puskas') return this.puskas.iniciar(ctx);
         return this.iniciar(ctx, camp, args);
       case 'iniciarpuskas': return this.puskas.iniciar(ctx);
+      case 'cancelarpuskas': return this.puskas.cancelar(ctx);
       case 'puskas': return this.puskas.comando(ctx, args);
       case 'castigo': case 'rebaixar': case 'tiraradm': case 'tiraradmin': return this.castigo.aplicar(ctx, args);
       case 'castigos': return this.castigo.lista(ctx);
