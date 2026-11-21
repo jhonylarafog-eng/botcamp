@@ -195,4 +195,15 @@ function novo() {
   assert.strictEqual(camp().status, 'inscricoes');
 }
 
+// ---------- 6) atalhos sem "camp": /iniciarx3, /iniciarx3aleatorio ----------
+{
+  const { diz, camp } = novo();
+  assert.match(diz(ADMIN, '/iniciarx3aleatorio'), /ESCOLHA A LIGA/);
+  assert.strictEqual(camp().aleatorio, true);
+  assert.strictEqual(camp().modo, 'x3');
+  diz(ADMIN, '/cancelar');
+  assert.match(diz(ADMIN, '/iniciarx2 aleatorio'), /ESCOLHA A LIGA/);
+  assert.strictEqual(camp().aleatorio, true);
+}
+
 console.log('\n✅ camp_novo ok');
