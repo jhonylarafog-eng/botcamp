@@ -12,7 +12,7 @@ const { Castigo } = require('./castigo');
 const AJUDA = `⚽ *Bot de Campeonato*
 
 *Montar campeonato*
-/iniciarcampx1 /iniciarcampx2 /iniciarcampx3 (ou /iniciarx1 /iniciarx2 /iniciarx3) — começa o camp. O bot pergunta a *liga* e *quantos clubes entram*; responda com o número
+/iniciarcampx1 /iniciarcampx2 /iniciarcampx3 — começa o camp. O bot pergunta a *liga* e *quantos clubes entram*; responda com o número
 (admin) coloque *aleatorio* no final (ex.: /iniciarcampx3 aleatorio) — todo mundo escolhe um time e, quando encher, o bot embaralha todo mundo e sorteia os confrontos
 Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 /listacamp — times livres e preenchidos (marca quem está em cada time)
@@ -139,7 +139,7 @@ class Bot {
     if (limparJunto) return this.puskas.limpar_vencedores(ctx, limparJunto[1] || args);
     const votarJunto = cmd.match(/^votarpuskas(\d+)$/);
     if (votarJunto) return this.puskas.votarTexto(ctx, votarJunto[1]);
-    const mc = cmd.match(/^iniciar(?:camp)?(x[123])(aleatorio)?$/);
+    const mc = cmd.match(/^iniciarcamp(x[123])(aleatorio)?$/);
     if (mc) return this.iniciarCamp(ctx, camp, mc[1], `${mc[2] || ''} ${args}`);
     switch (cmd) {
       case 'iniciarcamp': {
