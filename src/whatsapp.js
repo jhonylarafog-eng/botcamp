@@ -63,6 +63,19 @@ async function ehAdmin(sock, chatId, senderId) {
   }
 }
 
+// ids (para marcar) de todos os admins do grupo, sem o próprio bot
+async function listarAdmins(sock, chatId) {
+  try {
+    const meta = await sock.groupMetadata(chatId);
+    const eu = new Set([sock.user?.id, sock.user?.lid].filter(Boolean).map((x) => x.split(':')[0].split('@')[0]));
+    return meta.participants
+      .filter((p) => p.admin && !eu.has(String(p.id).split(':')[0].split('@')[0]))
+      .map((p) => p.id);
+  } catch (e) {
+    return [];
+  }
+}
+
 // ---------- processamento em fila (garante a ordem das mensagens) ----------
 let fila = Promise.resolve();
 
@@ -190,6 +203,13 @@ async function enviarRespostas(sock, respostas) {
     for (const r of respostas) {
       if (r.grupo) { await mudarGrupo(sock, r.chatId, r.grupo, estadoGrupo); continue; }
       if (r.castigo) { await aplicarCastigo(sock, r.chatId, r.castigo); continue; }
+      if (r.admins) {
+        const adm = await listarAdmins(sock, r.chatId);
+        if (adm.length) {
+          r.text += `\n\n👮 ${adm.map((x) => '@' + x.split('@')[0].split(':')[0]).join(' ')}`;
+          r.mentions = [...(r.mentions || []), ...adm];
+        }
+      }
       let res;
       if (r.video) {
         const buffer = fs.readFileSync(r.video.arquivo);

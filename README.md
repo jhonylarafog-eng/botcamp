@@ -4,7 +4,8 @@ Bot que organiza campeonatos **X1, X2 e X3** em grupos de WhatsApp. O jogo roda 
 
 ## Como funciona
 
-1. `/iniciar` e escolher a competição (`/champions`, `/libertadores`, `/brasileirao`) e o modo (`/x1`, `/x2`, `/x3`)
+1. **Novo jeito:** `/iniciarcampx1`, `/iniciarcampx2` ou `/iniciarcampx3` (admin: `aleatorio` no final pro modo aleatório). O bot pergunta a *liga* (20 opções, responde só o número) e *quantos clubes entram* (64/32/16/8/4/2). Depois é só digitar o nome do time. Entrou, não sai mais; só admin tira com `/removertime` (respondendo a mensagem da pessoa ou marcando). `/listacamp` mostra times livres e preenchidos. Quando enche, o bot avisa, cria os confrontos e segue o *cria*. No fim: `/vitoria eu` ou `/vitoria @quem` (admin), ou o jogador fala *ganhei* e o bot pergunta aos admins (`/confirmar` ou `/negar`). As ligas e os clubes ficam em `src/ligas.js` (edite à vontade).
+   _Jeito antigo (ainda funciona):_ `/iniciar` e escolher a competição (`/champions`, `/libertadores`, `/brasileirao`) e o modo (`/x1`, `/x2`, `/x3`)
 2. Cada pessoa **digita o nome do clube** pra entrar nele (aceita apelido e erro de digitação)
 3. Quando todos os clubes enchem, o bot sorteia os confrontos (mata-mata, com folga se o número for ímpar)
 4. Em cada jogo, alguém manda `cria`: quem mandar primeiro faz o **time adversário** criar a sala. O bot marca o time que vai criar

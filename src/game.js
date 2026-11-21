@@ -2,7 +2,7 @@
 //
 // handle({ chatId, senderId, senderName, text, isAdmin }) -> [{ chatId, text, mentions }]
 
-const { COMPETICOES, MODOS } = require('./clubs');
+const { COMPETICOES, MENU_LIGAS, TAMANHOS, MODOS, NOME_MODO, poolMega } = require('./clubs');
 const { norm, acharClube } = require('./text');
 const rank = require('./rankings');
 const { Contagem } = require('./contagem');
@@ -12,28 +12,20 @@ const { Castigo } = require('./castigo');
 const AJUDA = `⚽ *Bot de Campeonato*
 
 *Montar campeonato*
-/iniciar — começa um campeonato
-/champions /libertadores /brasileirao — escolhe a competição
-/x1 /x2 /x3 — escolhe o modo
-/times 4 — muda a quantidade de clubes
-Depois é só *digitar o nome do clube* pra entrar nele
-/listatimes — times completos e times com vaga (durante as inscrições)
-/sair — sai do clube
-/comecar — (admin) começa só com os clubes completos
-/cancelar — (admin) cancela o campeonato
-
-*Modo aleatório*
-(admin) /x3aleatorio — abre o sorteio (também /x1aleatorio /x2aleatorio)
-Escolha a fase: /final /semi /quartas /oitavas
-Todo mundo escolhe um clube; quando enche, o bot embaralha os jogadores entre os times e sorteia os confrontos
-(admin) /comecar — sorteia agora com quem já entrou
+/iniciarcampx1 /iniciarcampx2 /iniciarcampx3 — começa o camp. O bot pergunta a *liga* e *quantos clubes entram*; responda com o número
+(admin) coloque *aleatorio* no final (ex.: /iniciarcampx3 aleatorio) — todo mundo escolhe um time e, quando encher, o bot embaralha todo mundo e sorteia os confrontos
+Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
+/listacamp — times livres e preenchidos (marca quem está em cada time)
+(admin) /removertime @fulano — tira alguém do time (ou responda a mensagem da pessoa com /removertime)
+(admin) /comecar — começa só com os times completos
+(admin) /cancelar — cancela o campeonato
 
 *Durante os jogos*
 *cria* — o time ADVERSÁRIO vai criar a sala
 /sala CÓDIGO — manda o código da sala
-/placar 3x1 — informa o placar (seu time primeiro)
-/placar 2x2 pen 4x3 — com pênaltis
-/confirmar — o adversário confirma o placar
+(admin) /vitoria eu — se você ganhou · /vitoria @fulano — marca quem ganhou
+Quem ganhou pode falar *ganhei* ou /vitoria: o bot pergunta aos admins se está certo
+(admin) /confirmar — confirma o pedido de vitória · /negar — nega
 /gols 2 e /assist 1 — suas stats na última partida
 /status — situação do campeonato
 
@@ -88,7 +80,9 @@ class Bot {
     const grupo = (acao) => out.push({ chatId: msg.chatId, grupo: acao });
     // castigo(dados): pede ao conector pra tirar o admin da pessoa e só então avisar o grupo
     const castigo = (dados) => out.push({ chatId: msg.chatId, castigo: dados });
-    const ctx = { msg, say, sayVideo, grupo, castigo };
+    // sayAdmins: o conector acrescenta a marcação de todos os admins do grupo no fim da mensagem
+    const sayAdmins = (text, mentions = []) => out.push({ chatId: msg.chatId, text, mentions, admins: true });
+    const ctx = { msg, say, sayVideo, grupo, castigo, sayAdmins };
     try {
       this._handle(ctx);
     } catch (e) {
@@ -125,8 +119,15 @@ class Bot {
       return this.comando(ctx, norma(m[1]), m[2].trim(), camp);
     }
     if (!camp) return;
+    if (camp.status === 'liga') return this.escolherLiga(ctx, camp, text);
+    if (camp.status === 'tamanho') return this.escolherTamanho(ctx, camp, text);
     if (camp.status === 'inscricoes') return this.entrar(ctx, camp, text, false);
-    if (camp.status === 'andamento' && norm(text) === 'cria') return this.cria(ctx, camp);
+    if (camp.status === 'andamento') {
+      const n = norm(text);
+      if (n === 'cria') return this.cria(ctx, camp);
+      // jogador avisando que ganhou: o bot pergunta aos admins
+      if (/^(eu |nos )?(ganhei|venci|ganhamos|vencemos|vitoria)( o jogo| a partida| essa)?$/.test(n)) return this.vitoria(ctx, camp, 'eu', true);
+    }
   }
 
   comando(ctx, cmd, args, camp) {
@@ -138,7 +139,18 @@ class Bot {
     if (limparJunto) return this.puskas.limpar_vencedores(ctx, limparJunto[1] || args);
     const votarJunto = cmd.match(/^votarpuskas(\d+)$/);
     if (votarJunto) return this.puskas.votarTexto(ctx, votarJunto[1]);
+    const mc = cmd.match(/^iniciarcamp(x[123])(aleatorio)?$/);
+    if (mc) return this.iniciarCamp(ctx, camp, mc[1], `${mc[2] || ''} ${args}`);
     switch (cmd) {
+      case 'iniciarcamp': {
+        const m = norm(args).match(/\b(x[123])\b/);
+        if (!m) return say('Use assim: /iniciarcampx1, /iniciarcampx2 ou /iniciarcampx3 (admin: coloque *aleatorio* no final pro modo aleatório).');
+        return this.iniciarCamp(ctx, camp, m[1], args);
+      }
+      case 'listacamp': return this.listaCamp(ctx, camp);
+      case 'removertime': return this.removerTime(ctx, camp);
+      case 'vitoria': return this.vitoria(ctx, camp, args);
+      case 'negar': return this.negar(ctx, camp);
       case 'ajuda': case 'comandos': case 'help': case 'menu':
         return say(AJUDA);
       case 'iniciar':
@@ -187,7 +199,7 @@ class Bot {
       case 'add': case 'adicionar': return this.contagem.adicionar(ctx, args);
       // /lista (sozinho) é ignorado de propósito: outro bot do grupo usa esse comando
       case 'listatimes':
-        if (camp && camp.status === 'inscricoes') return this.listaTimes(ctx, camp);
+        if (camp && camp.status === 'inscricoes') return camp.novo ? this.listaCamp(ctx, camp) : this.listaTimes(ctx, camp);
         return say('Não tem inscrições abertas agora. Use /iniciar ou /x3aleatorio (admin).');
       case 'artilheiros': return this.contagem.ranking(ctx);
       case 'resetartilharia': case 'resetarartilharia': case 'zerarartilharia': return this.contagem.resetar(ctx, args);
@@ -258,6 +270,7 @@ class Bot {
 
   // mostra um time: nome, jogadores e vagas livres. marcar=true menciona (marca) os jogadores
   blocoTime(camp, c, marcar = true) {
+    if (camp.novo) return `${c.jogadores.length >= camp.tamanho ? '✅' : '🟡'} ${this.linhaTime(camp, c)}`;
     const cheio = c.jogadores.length >= camp.tamanho;
     const linhas = c.jogadores.map((id) => `   👤 ${marcar ? tag(id) : this.nome(id)}`);
     for (let i = c.jogadores.length; i < camp.tamanho; i++) linhas.push('   ▫️ _vaga livre_');
@@ -288,6 +301,196 @@ class Bot {
       .join('\n');
   }
 
+  // ---------- novo fluxo: /iniciarcampx1|x2|x3 ----------
+  menuLigas(camp) {
+    return (
+      `⚽ *ESCOLHA A LIGA* ⚽  _(${NOME_MODO[camp.modo]})_\n` +
+      `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n` +
+      MENU_LIGAS.map((k, i) => `${i + 1} ▸ ${COMPETICOES[k].emoji} ${COMPETICOES[k].nome.toUpperCase()}`).join('\n') +
+      `\n\n👉 Manda o número aí!`
+    );
+  }
+
+  menuTamanhos(camp) {
+    return (
+      `🎯 *QUANTOS CLUBES ENTRAM?* 🎯\n` +
+      `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n` +
+      TAMANHOS.map((t, i) => `${i + 1} ▸ ${t.emoji} ${t.nome} (${t.n})`).join('\n') +
+      `\n\n_A opção 1 (MEGA TORNEIO) ignora a liga escolhida acima ▸ os 64 times saem misturados de várias ligas (sem seleção). ` +
+      `Exceção: se você escolheu COPA DO MUNDO, os 64 times saem só de seleções._\n\n` +
+      `▸ Manda o número aí!`
+    );
+  }
+
+  // /iniciarcampx3 [aleatorio]
+  iniciarCamp(ctx, camp, modo, args) {
+    const { say, msg } = ctx;
+    if (!MODOS[modo]) return;
+    if (camp) return say('Já tem um campeonato rolando aqui. Use /status pra ver, ou /cancelar (admin) pra encerrar.');
+    const aleatorio = norma(args).includes('aleatorio');
+    if (aleatorio && !msg.isAdmin) return say('Só admin abre o modo aleatório.');
+    this.registrar(ctx);
+    const id = this.store.novoId('campeonato');
+    const novo = {
+      id, chatId: msg.chatId, organizador: msg.senderId, status: 'liga', novo: true, aleatorio,
+      competicao: null, modo, tamanho: MODOS[modo], clubes: [], rodada: 0,
+      partidas: [], passaram: [], criadoEm: Date.now(),
+    };
+    this.store.data.campeonatos[id] = novo;
+    this.store.data.ativos[msg.chatId] = id;
+    say(this.menuLigas(novo));
+  }
+
+  // resposta do organizador (ou admin) com o número da liga
+  escolherLiga(ctx, camp, texto) {
+    const { say } = ctx;
+    if (!this.ehOrg(ctx, camp)) return;
+    const t = norm(texto);
+    let chave = null;
+    if (/^\d{1,2}$/.test(t)) {
+      const i = parseInt(t, 10);
+      if (i < 1 || i > MENU_LIGAS.length) return say(`Escolha um número de 1 a ${MENU_LIGAS.length}.`);
+      chave = MENU_LIGAS[i - 1];
+    } else if (t.length <= 24) {
+      chave = MENU_LIGAS.find((k) => norm(COMPETICOES[k].nome) === t) || null;
+    }
+    if (!chave) return;
+    camp.competicao = chave;
+    camp.status = 'tamanho';
+    say(this.menuTamanhos(camp));
+  }
+
+  // resposta do organizador (ou admin) com o número de clubes
+  escolherTamanho(ctx, camp, texto) {
+    const { say } = ctx;
+    if (!this.ehOrg(ctx, camp)) return;
+    const t = norm(texto);
+    if (!/^\d{1,2}$/.test(t)) return;
+    const i = parseInt(t, 10);
+    if (i < 1 || i > TAMANHOS.length) return say(`Escolha um número de 1 a ${TAMANHOS.length}.`);
+    const op = TAMANHOS[i - 1];
+    camp.mega = op.n === 64;
+    const pool = this.poolDe(camp).length;
+    if (op.n > pool) {
+      camp.mega = false;
+      return say(`${COMPETICOES[camp.competicao].nome} só tem ${pool} clubes. Escolha outra opção (1 = mega torneio com clubes de várias ligas).`);
+    }
+    camp.etapaNome = op.nome;
+    this.sortearClubes(camp, op.n);
+    camp.status = 'inscricoes';
+    say(this.textoCamp(camp), [camp.organizador]);
+  }
+
+  tituloCamp(camp) {
+    if (camp.mega) return camp.competicao && COMPETICOES[camp.competicao].selecoes ? '🌍 MEGA COPA DE SELEÇÕES' : '🌍 MEGA TORNEIO';
+    const comp = COMPETICOES[camp.competicao];
+    return `${comp.emoji} ${comp.nome.toUpperCase()}`;
+  }
+
+  // mensagem de abertura das inscrições (fluxo novo)
+  textoCamp(camp) {
+    const vagas = camp.tamanho;
+    return (
+      `${this.tituloCamp(camp)} ⚔️ *${NOME_MODO[camp.modo]}*${camp.aleatorio ? ' 🎲 *ALEATÓRIO*' : ''}\n` +
+      `📍 *${camp.etapaNome}* (${camp.clubes.length} clubes)\n` +
+      `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n` +
+      camp.clubes.map((c) => `${c.cores || '⚪'} *${c.nome.toUpperCase()}* ▸ _(Livre)_`).join('\n') +
+      `\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n` +
+      `✍️ _Time de ${vagas} ${vagas === 1 ? 'vaga' : 'vagas'} ▸ escreve o nome do time pra entrar, até completar!_\n` +
+      (camp.aleatorio
+        ? `🎲 _Modo aleatório: escolha um time. Quando encher, o bot embaralha todo mundo entre os times e sorteia os confrontos._\n`
+        : '') +
+      `🎙️ Organização: ${tag(camp.organizador)}`
+    );
+  }
+
+  // linha de um time: bolinhas, nome e quem está dentro (marcado) ou (Livre)
+  linhaTime(camp, c) {
+    const nomes = c.jogadores.map(tag);
+    while (nomes.length < camp.tamanho) nomes.push('_(Livre)_');
+    return `${c.cores || '⚪'} *${c.nome.toUpperCase()}* ▸ ${nomes.join(' & ')}`;
+  }
+
+  // /listacamp: times livres e preenchidos, marcando as pessoas
+  listaCamp(ctx, camp) {
+    const { say } = ctx;
+    if (!camp || camp.status !== 'inscricoes') return say('Não tem inscrições abertas agora. Use /iniciarcampx1, /iniciarcampx2 ou /iniciarcampx3.');
+    const cheios = camp.clubes.filter((c) => c.jogadores.length >= camp.tamanho);
+    const livres = camp.clubes.filter((c) => c.jogadores.length < camp.tamanho);
+    const vagas = livres.reduce((n, c) => n + camp.tamanho - c.jogadores.length, 0);
+    let txt = `📋 *${this.tituloCamp(camp)} ⚔️ ${NOME_MODO[camp.modo]}*${camp.aleatorio ? ' 🎲' : ''}\n` +
+      `✅ ${cheios.length} preenchido${cheios.length === 1 ? '' : 's'} · 🟡 ${livres.length} com vaga · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
+    if (livres.length) txt += `\n\n🟡 *TIMES LIVRES*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n` + livres.map((c) => this.linhaTime(camp, c)).join('\n');
+    if (cheios.length) txt += `\n\n✅ *TIMES PREENCHIDOS*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n` + cheios.map((c) => this.linhaTime(camp, c)).join('\n');
+    say(txt, camp.clubes.flatMap((c) => c.jogadores));
+  }
+
+  // /removertime — só admin; respondendo a mensagem da pessoa ou marcando ela
+  removerTime(ctx, camp) {
+    const { say, msg } = ctx;
+    if (!camp || camp.status !== 'inscricoes') return say('Não tem inscrições abertas agora.');
+    if (!msg.isAdmin) return say('Só admin remove alguém do time.');
+    const alvo = (msg.mentions || [])[0] || (msg.quoted && msg.quoted.senderId) || null;
+    if (!alvo) return say('Responda a mensagem da pessoa com /removertime, ou marque ela: /removertime @fulano');
+    const mesmo = (a, b) => a === b || a.split('@')[0].split(':')[0] === b.split('@')[0].split(':')[0];
+    for (const c of camp.clubes) {
+      const i = c.jogadores.findIndex((j) => mesmo(j, alvo));
+      if (i >= 0) {
+        const [saiu] = c.jogadores.splice(i, 1);
+        return say(`🗑️ ${tag(saiu)} foi removido do *${c.nome}* por um admin.\n\n${this.blocoTime(camp, c, false)}`, [saiu]);
+      }
+    }
+    say(`${tag(alvo)} não está em nenhum time.`, [alvo]);
+  }
+
+  // /vitoria eu · /vitoria @fulano (admin confirma na hora) · jogador pede e os admins confirmam
+  vitoria(ctx, camp, args, natural = false) {
+    const { say, sayAdmins, msg } = ctx;
+    if (!camp || camp.status !== 'andamento') return;
+    const id = msg.senderId;
+    const t = norma(args);
+    const marcado = (msg.mentions || [])[0] || (msg.quoted && msg.quoted.senderId) || null;
+    const abertas = () => this.partidasDaRodada(camp).filter((x) => x.estado !== 'finalizada');
+    // admin sem dizer quem: confirma o pedido pendente, se só tiver um
+    if (!natural && msg.isAdmin && !marcado && t !== 'eu') {
+      const pedidos = abertas().filter((x) => x.pedido);
+      if (pedidos.length === 1 && !pedidos[0].disputa) return this.finalizar(ctx, camp, pedidos[0], pedidos[0].pedido.lado);
+      return say('Use: */vitoria eu* (se você ganhou) ou */vitoria @quem ganhou*.');
+    }
+    const alvo = marcado || id;
+    const p = abertas().find((x) => x.timeA.jogadores.includes(alvo) || x.timeB.jogadores.includes(alvo));
+    if (!p) {
+      if (natural) return; // conversa solta
+      return say(marcado ? `${tag(alvo)} não está em nenhum jogo em aberto.` : 'Você não está em nenhum jogo em aberto.', marcado ? [alvo] : []);
+    }
+    this.registrar(ctx);
+    const lado = p.timeA.jogadores.includes(alvo) ? 'A' : 'B';
+    if (msg.isAdmin && !natural) return this.finalizar(ctx, camp, p, lado);
+    // jogador pediu: só os admins confirmam
+    if (p.pedido && p.pedido.lado === lado) return say('Já avisei os admins. Aguarde a confirmação.');
+    if (p.pedido && p.pedido.lado !== lado) p.disputa = true;
+    p.pedido = { por: id, lado, em: Date.now() };
+    const venc = lado === 'A' ? p.timeA : p.timeB;
+    sayAdmins(
+      `🏆 ${tag(id)} pediu a vitória do *${venc.clube}* em *${p.timeA.clube} x ${p.timeB.clube}*.\n\n` +
+      (p.disputa
+        ? `⚠️ Os dois times pediram a vitória! Admins, marquem quem ganhou: */vitoria @fulano*`
+        : `Admins, está certo? Confirmem com */confirmar* (ou */vitoria @fulano*). Se não, */negar*.`),
+      [id]
+    );
+  }
+
+  // /negar — admin nega os pedidos de vitória em aberto
+  negar(ctx, camp) {
+    const { say, msg } = ctx;
+    if (!camp || camp.status !== 'andamento') return;
+    if (!msg.isAdmin) return say('Só admin nega um pedido de vitória.');
+    const pedidos = this.partidasDaRodada(camp).filter((x) => x.pedido && x.estado !== 'finalizada');
+    if (!pedidos.length) return say('Nenhum pedido de vitória em aberto.');
+    pedidos.forEach((x) => { x.pedido = null; x.disputa = false; });
+    say(`❌ Pedido de vitória negado (${pedidos.map((x) => `${x.timeA.clube} x ${x.timeB.clube}`).join(', ')}). O jogo segue em aberto.`);
+  }
+
   // ---------- criação do campeonato ----------
   iniciar(ctx, camp, args) {
     const { say, msg } = ctx;
@@ -315,7 +518,7 @@ class Bot {
     }
     say(
       `🏟️ *Novo campeonato!* Escolha a competição:\n\n` +
-      Object.entries(COMPETICOES).map(([k, v]) => `${v.emoji} /${k}`).join('\n')
+      ['champions', 'libertadores', 'brasileirao'].map((k) => `${COMPETICOES[k].emoji} /${k}`).join('\n')
     );
   }
 
@@ -329,11 +532,15 @@ class Bot {
     say(`${comp.emoji} *${comp.nome}*! Agora o modo:\n\n/x1 — 1 contra 1\n/x2 — 2 contra 2\n/x3 — 3 contra 3`);
   }
 
+  // clubes que podem entrar: da liga escolhida (ou misturados, no mega torneio)
+  poolDe(camp) {
+    return camp.mega ? poolMega(camp.competicao) : COMPETICOES[camp.competicao].clubes;
+  }
+
   sortearClubes(camp, quantidade) {
-    const pool = COMPETICOES[camp.competicao].clubes;
-    camp.clubes = this.embaralhar(pool)
+    camp.clubes = this.embaralhar(this.poolDe(camp))
       .slice(0, quantidade)
-      .map((c) => ({ nome: c.nome, apelidos: c.apelidos, jogadores: [] }));
+      .map((c) => ({ nome: c.nome, apelidos: c.apelidos, cores: c.cores, jogadores: [] }));
     camp.numClubes = camp.clubes.length;
   }
 
@@ -343,7 +550,7 @@ class Bot {
     if (!this.ehOrg(ctx, camp)) return say('Só quem iniciou o campeonato (ou um admin) escolhe o modo.');
     camp.modo = modo;
     camp.tamanho = MODOS[modo];
-    const pool = COMPETICOES[camp.competicao].clubes.length;
+    const pool = this.poolDe(camp).length;
     this.sortearClubes(camp, Math.min(8, pool));
     camp.status = 'inscricoes';
     say(this.textoInscricoes(camp));
@@ -382,7 +589,7 @@ class Bot {
     const { say, msg } = ctx;
     if (!camp || camp.status !== 'etapa' || !n) return;
     if (!msg.isAdmin) return say('Só admin escolhe a fase.');
-    const pool = COMPETICOES[camp.competicao].clubes.length;
+    const pool = this.poolDe(camp).length;
     if (n > pool) return say(`Essa competição só tem ${pool} clubes. Escolha uma fase menor.`);
     this.sortearClubes(camp, n);
     camp.status = 'inscricoes';
@@ -399,7 +606,7 @@ class Bot {
     }
     const embaralhados = this.embaralhar(jogadores);
     const clubes = this.embaralhar(camp.clubes).slice(0, k).map((c, i) => ({
-      nome: c.nome, apelidos: c.apelidos,
+      nome: c.nome, apelidos: c.apelidos, cores: c.cores,
       jogadores: embaralhados.slice(i * camp.tamanho, (i + 1) * camp.tamanho),
     }));
     const reservas = embaralhados.slice(k * camp.tamanho);
@@ -432,7 +639,7 @@ class Bot {
     if (!camp || camp.status !== 'inscricoes') return;
     if (!this.ehOrg(ctx, camp)) return say('Só quem iniciou o campeonato (ou um admin) muda isso.');
     const n = parseInt(args, 10);
-    const pool = COMPETICOES[camp.competicao].clubes.length;
+    const pool = this.poolDe(camp).length;
     if (!Number.isInteger(n) || n < 2 || n > pool) return say(`Use /times com um número de 2 a ${pool}.`);
     this.sortearClubes(camp, n);
     say('🔄 Clubes sorteados de novo, inscrições reiniciadas!\n\n' + this.textoInscricoes(camp));
@@ -449,6 +656,10 @@ class Bot {
     }
     const id = ctx.msg.senderId;
     this.registrar(ctx);
+    if (camp.novo) {
+      const atual = camp.clubes.find((c) => c.jogadores.includes(id));
+      if (atual) return say(`Você já está no *${atual.nome}*. Entrou, não sai mais — só admin tira (/removertime).`);
+    }
     if (clube.jogadores.includes(id)) return say(`Você já está no ${clube.nome}.`);
     if (clube.jogadores.length >= camp.tamanho) {
       return say(`O ${clube.nome} já está completo (${camp.tamanho}/${camp.tamanho}). Escolha outro clube!`);
@@ -459,7 +670,7 @@ class Bot {
       if (i >= 0) { c.jogadores.splice(i, 1); antigo = c; }
     }
     clube.jogadores.push(id);
-    let txt = `✅ ${this.nome(id)} ${antigo ? `saiu do ${antigo.nome} e ` : ''}entrou no time!\n\n${this.blocoTime(camp, clube)}`;
+    let txt = `✅ ${camp.novo ? tag(id) : this.nome(id)} ${antigo ? `saiu do ${antigo.nome} e ` : ''}entrou no time!\n\n${this.blocoTime(camp, clube)}`;
     if (antigo) txt += `\n\n_Como ficou o ${antigo.nome}:_\n${this.blocoTime(camp, antigo, false)}`;
     say(txt, [...clube.jogadores]);
     if (camp.clubes.every((c) => c.jogadores.length >= camp.tamanho)) {
@@ -470,6 +681,7 @@ class Bot {
   sair(ctx, camp) {
     const { say } = ctx;
     if (!camp || camp.status !== 'inscricoes') return;
+    if (camp.novo) return say('Entrou, não sai mais. Só admin tira alguém do time (/removertime).');
     const id = ctx.msg.senderId;
     for (const c of camp.clubes) {
       const i = c.jogadores.indexOf(id);
@@ -513,7 +725,8 @@ class Bot {
     if (n <= 4) return 'Semifinal';
     if (n <= 8) return 'Quartas de final';
     if (n <= 16) return 'Oitavas de final';
-    return 'Fase de 32';
+    if (n <= 32) return 'Fase de 32';
+    return 'Fase de 64';
   }
 
   time(camp, nomeClube) {
@@ -552,6 +765,7 @@ class Bot {
     txt +=
       `\n\n👉 Em cada jogo, alguém de um dos times manda *cria*. ` +
       `Quem mandar primeiro faz o time ADVERSÁRIO criar a sala no jogo.`;
+    if (camp.novo) txt += `\n🏁 No fim: o admin manda */vitoria eu* ou */vitoria @quem ganhou*. Quem ganhou também pode falar *ganhei*.`;
     ctx.say(txt, [...mencoes]);
   }
 
@@ -599,7 +813,9 @@ class Bot {
     say(
       `🔑 Sala criada por ${tag(id)} (${meu.clube})!\n\n*Código: ${codigo}*\n\n` +
       `${outro.jogadores.map(tag).join(' ')} — podem entrar! Bom jogo!\n` +
-      `Quando acabar: /placar 3x1 (seu time primeiro)`,
+      (camp.novo
+        ? `Quando acabar: o admin manda /vitoria eu ou /vitoria @quem ganhou (quem ganhou também pode falar *ganhei*).`
+        : `Quando acabar: /placar 3x1 (seu time primeiro)`),
       [id, ...outro.jogadores]
     );
   }
@@ -646,6 +862,7 @@ class Bot {
   }
 
   textoPlacar(p) {
+    if (!p.placar) return `${p.timeA.clube} x ${p.timeB.clube} — vitória do ${p.vencedor || '?'}`;
     let t = `${p.timeA.clube} ${p.placar.a} x ${p.placar.b} ${p.timeB.clube}`;
     if (p.penaltis) t += ` (pên. ${p.penaltis.a} x ${p.penaltis.b})`;
     return t;
@@ -654,6 +871,12 @@ class Bot {
   confirmar(ctx, camp) {
     const { say, msg } = ctx;
     if (!camp || camp.status !== 'andamento') return;
+    // admin confirmando um pedido de vitória
+    const pedidos = this.partidasDaRodada(camp).filter((x) => x.pedido && x.estado !== 'finalizada');
+    if (msg.isAdmin && pedidos.length) {
+      if (pedidos.length > 1 || pedidos[0].disputa) return say('Tem mais de um pedido (ou os dois times pediram). Marque quem ganhou: /vitoria @fulano');
+      return this.finalizar(ctx, camp, pedidos[0], pedidos[0].pedido.lado);
+    }
     const p = this.minhaPartida(camp, msg.senderId, ['aguardando_confirmacao']);
     if (!p) return;
     if (this.ladoDe(p, msg.senderId).clube === p.reportadoClube) {
@@ -674,10 +897,14 @@ class Bot {
     this.finalizar(ctx, camp, p);
   }
 
-  finalizar(ctx, camp, p) {
-    const aGanhou = p.penaltis
-      ? p.penaltis.a > p.penaltis.b
-      : p.placar.a > p.placar.b;
+  finalizar(ctx, camp, p, lado = null) {
+    const aGanhou = lado
+      ? lado === 'A'
+      : p.penaltis
+        ? p.penaltis.a > p.penaltis.b
+        : p.placar.a > p.placar.b;
+    p.pedido = null;
+    p.disputa = false;
     p.vencedor = aGanhou ? p.timeA.clube : p.timeB.clube;
     p.perdedor = aGanhou ? p.timeB.clube : p.timeA.clube;
     p.estado = 'finalizada';
@@ -753,10 +980,12 @@ class Bot {
   status(ctx, camp) {
     const { say } = ctx;
     if (!camp) return say('Nenhum campeonato rolando. Use /iniciar pra começar um.');
-    if (camp.status === 'competicao') return say('Escolha a competição: ' + Object.keys(COMPETICOES).map((k) => '/' + k).join(' '));
+    if (camp.status === 'competicao') return say('Escolha a competição: /champions /libertadores /brasileirao');
+    if (camp.status === 'liga') return say(this.menuLigas(camp));
+    if (camp.status === 'tamanho') return say(this.menuTamanhos(camp));
     if (camp.status === 'modo') return say('Escolha o modo: /x1 /x2 /x3');
     if (camp.status === 'etapa') return say('Admin, escolha a fase: /final /semi /quartas /oitavas');
-    if (camp.status === 'inscricoes') return say(this.textoInscricoes(camp));
+    if (camp.status === 'inscricoes') return say(camp.novo ? this.textoCamp(camp) : this.textoInscricoes(camp), camp.novo ? [camp.organizador] : []);
     const icone = { aguardando_cria: '⏳', aguardando_sala: '🔧', jogando: '🎮', aguardando_confirmacao: '📝', finalizada: '✅' };
     const linhas = this.partidasDaRodada(camp).map((p) => {
       let extra = '';
