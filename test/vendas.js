@@ -89,7 +89,7 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(precoFotos(3) < precoFotos(5));
   });
   await teste('prompt tem tabela, Pix e regra de nunca confirmar pagamento', () => {
-    const p = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
+    const p = montarPrompt({ pixChave: 'pix@exemplo.com', agora: 'hoje' });
     assert.ok(p.includes(tabelaTexto()));
     assert.ok(p.includes('pix@exemplo.com'));
     assert.ok(p.includes('NUNCA confirma que o pagamento caiu'));
@@ -329,7 +329,7 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(chamadas.telegram[0].text.includes('GEMINI_API_KEY'));
   });
 
-  const PR = () => montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
+  const PR = () => montarPrompt({ pixChave: 'pix@exemplo.com', agora: 'hoje' });
   await teste('manual: só vende foto de estúdio, sem nada de vídeo ou tabela por duração', async () => {
     const pr = PR();
     assert.ok(pr.includes('foto profissional de estúdio'));
@@ -390,10 +390,24 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(pr.includes('MENSAGENS SEPARADAS'));
     assert.ok(pr.includes('SÓ a chave, sozinha na mensagem'));
     assert.ok(pr.includes('Nunca escreva a chave dentro de uma frase'));
-    assert.ok(pr.includes('peça que mande o comprovante'));
+    assert.ok(pr.includes('que você fica aguardando o pagamento'));
+    assert.ok(pr.includes('mandar o comprovante por aqui'));
     assert.ok(pr.includes('Recebi, vou conferir aqui e já te aviso!'));
     assert.ok(pr.includes('NUNCA confirma que o pagamento caiu'));
     assert.ok(pr.includes('[[PAGAMENTO|resumo curto: quantidade'));
+  });
+  await teste('manual: Pix avisa que o valor vai direto pra Jennifer, a dona, antes do valor e da chave', async () => {
+    const pr = PR();
+    const iAviso = pr.indexOf('(1) o aviso de quem recebe');
+    const iValor = pr.indexOf('(2) o valor combinado');
+    const iChave = pr.indexOf('(3) SÓ a chave');
+    const iAguarda = pr.indexOf('(4) que você fica aguardando');
+    assert.ok(iAviso > 0 && iAviso < iValor && iValor < iChave && iChave < iAguarda);
+    assert.ok(pr.includes('o valor vai direto para Jennifer, a dona do Estúdio Digital'));
+    assert.ok(pr.includes('vai direto pra Jennifer, a dona do Estúdio Digital, então é o nome dela'));
+    assert.ok(pr.includes('só nesse momento, junto do Pix, não no meio da conversa'));
+    assert.ok(!pr.includes('em nome de'));
+    assert.ok(montarPrompt({ pixChave: 'x', pixDono: 'Maria', agora: 'hoje' }).includes('direto para Maria, a dona'));
   });
   await teste('manual: imagem pode ser foto do cliente ou comprovante e o atendente reconhece e segue o fluxo', async () => {
     const pr = PR();
