@@ -224,3 +224,20 @@ console.log('\n✅ camp_novo ok');
   assert.strictEqual(bot.maisAtivoHoje(CHAT, amanha).id, id(5));
   console.log('✅ maisgay ok');
 }
+
+// ---------- /ignorarbot: outro bot não é escolhido no /maisgay ----------
+{
+  const { diz, bot } = novo();
+  const OUTRO = '5599888877770:12@s.whatsapp.net';
+  [1, 2].forEach((n) => bot.contarMensagem(CHAT, id(n)));
+  for (let i = 0; i < 5; i++) bot.contarMensagem(CHAT, OUTRO);
+  assert.match(diz(id(1), '/maisgay'), /@5599888877770/); // o bot ganhou
+  assert.match(diz(id(1), '/ignorarbot', { mentions: [OUTRO] }), /Só admin/);
+  assert.match(diz(ADMIN, '/ignorarbot'), /Responda a mensagem/);
+  assert.match(diz(ADMIN, '/ignorarbot', { quoted: { senderId: '5599888877770@s.whatsapp.net' } }), /não entra mais/);
+  assert.match(diz(id(1), '/maisgay'), /@5511900000001|@5511900000002/);
+  assert.doesNotMatch(diz(id(1), '/maisgay'), /5599888877770/);
+  diz(ADMIN, '/designorarbot', { mentions: [OUTRO] });
+  assert.match(diz(id(1), '/maisgay'), /@5599888877770/);
+  console.log('✅ ignorarbot ok');
+}

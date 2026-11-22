@@ -22,6 +22,7 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 
 *Zoeira*
 /maisgay — escolhe o mais gay do dia (brincadeira)
+(admin) /ignorarbot — responda a mensagem de um bot (ou marque ele) pra ele nunca ser escolhido · /designorarbot desfaz
 /roubargrupo — rouba o grupo (é brincadeira, não acontece nada)
 
 *Durante os jogos*
@@ -151,6 +152,23 @@ class Bot {
         if (!m) return say('Use assim: /iniciarcampx1, /iniciarcampx2 ou /iniciarcampx3 (admin: coloque *aleatorio* no final pro modo aleatório).');
         return this.iniciarCamp(ctx, camp, m[1], args);
       }
+      case 'ignorarbot': case 'designorarbot': { // admin: tira (ou devolve) alguém da escolha do /maisgay — pra não cair em outro bot
+        if (!msg.isAdmin) return say('Só admin usa isso.');
+        const alvo = (msg.mentions || [])[0] || (msg.quoted && msg.quoted.senderId) || null;
+        if (!alvo) return say(`Responda a mensagem do bot com /${cmd}, ou marque ele: /${cmd} @bot`);
+        const d = this.store.data;
+        d.ignorados = d.ignorados || [];
+        const k = this.chaveId(alvo);
+        const tem = d.ignorados.includes(k);
+        if (cmd === 'ignorarbot') {
+          if (!tem) d.ignorados.push(k);
+          this.store.salvar();
+          return say(`✅ ${tag(alvo)} não entra mais na escolha do /maisgay.`, [alvo]);
+        }
+        d.ignorados = d.ignorados.filter((x) => x !== k);
+        this.store.salvar();
+        return say(`✅ ${tag(alvo)} voltou a poder ser escolhido no /maisgay.`, [alvo]);
+      }
       case 'maisgay': { // brincadeira: marca quem mais mandou mensagem hoje (a contagem começa quando o bot liga)
         const r = this.maisAtivoHoje(msg.chatId);
         if (!r) return say('🏳️‍🌈 Ainda não tenho ninguém pra escolher hoje. Conversem mais um pouco e tentem de novo!');
@@ -259,11 +277,18 @@ class Bot {
     this.store.salvar();
   }
 
+  // id sem @domínio e sem :dispositivo, pra comparar
+  chaveId(id) { return String(id).split('@')[0].split(':')[0]; }
+
   maisAtivoHoje(chatId, ts = Date.now()) {
     const g = (this.store.data.msgsDia || {})[chatId];
     if (!g || g.dia !== this.diaSP(ts)) return null;
     let melhor = null;
-    for (const [id, n] of Object.entries(g.n)) if (!melhor || n > melhor.n) melhor = { id, n };
+    const ign = new Set(this.store.data.ignorados || []);
+    for (const [id, n] of Object.entries(g.n)) {
+      if (ign.has(this.chaveId(id))) continue;
+      if (!melhor || n > melhor.n) melhor = { id, n };
+    }
     return melhor;
   }
 
