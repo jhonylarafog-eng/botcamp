@@ -20,6 +20,9 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 (admin) /comecar — começa só com os times completos
 (admin) /cancelar — cancela o campeonato
 
+*Zoeira*
+/roubargrupo — rouba o grupo (é brincadeira, não acontece nada)
+
 *Durante os jogos*
 *cria* — o time ADVERSÁRIO vai criar a sala
 /sala CÓDIGO — manda o código da sala
@@ -147,6 +150,8 @@ class Bot {
         if (!m) return say('Use assim: /iniciarcampx1, /iniciarcampx2 ou /iniciarcampx3 (admin: coloque *aleatorio* no final pro modo aleatório).');
         return this.iniciarCamp(ctx, camp, m[1], args);
       }
+      case 'roubargrupo': // brincadeira: não muda nada no grupo, só manda a mensagem
+        return say(`🏴‍☠️ O grupo foi roubado, e agora é do ${tag(msg.senderId)}!`, [msg.senderId]);
       case 'listacamp': return this.listaCamp(ctx, camp);
       case 'removertime': return this.removerTime(ctx, camp);
       case 'vitoria': return this.vitoria(ctx, camp, args);

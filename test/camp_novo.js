@@ -196,3 +196,13 @@ function novo() {
 }
 
 console.log('\n✅ camp_novo ok');
+
+// ---------- /roubargrupo: brincadeira, qualquer pessoa ----------
+{
+  const { diz, store } = novo();
+  const antes = JSON.stringify(store.data.campeonatos);
+  const t = diz(id(4), '/roubargrupo');
+  assert.match(t, /O grupo foi roubado, e agora é do @5511900000004/);
+  assert.strictEqual(JSON.stringify(store.data.campeonatos), antes);
+  console.log('✅ roubargrupo ok');
+}
