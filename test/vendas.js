@@ -110,6 +110,16 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.deepStrictEqual(r.acoes, [{ tipo: 'PAGAMENTO', motivo: 'vídeo 17s R$31 pago tudo' }]);
     assert.deepStrictEqual(tirarMarcacoes('Já te falo [[HUMANO]]').acoes, [{ tipo: 'HUMANO', motivo: '' }]);
   });
+  await teste('Pix: a chave sempre sai sozinha numa mensagem, mesmo se vier junto com texto', () => {
+    const K = '09623517920';
+    assert.deepStrictEqual(dividir(`Fica R$7,99, pagamento por Pix.\n\n${K}\n\nMe manda o comprovante!`, K), ['Fica R$7,99, pagamento por Pix.', K, 'Me manda o comprovante!']);
+    assert.deepStrictEqual(dividir(`Fica R$7,99. Chave Pix: ${K}\n\nMe manda o comprovante!`, K), ['Fica R$7,99. Chave Pix', K, 'Me manda o comprovante!']);
+    assert.deepStrictEqual(dividir(`Pix: ${K} Depois me manda o comprovante.`, K), ['Pix', K, 'Depois me manda o comprovante.']);
+    const longa = dividir(`Entendi!\n\nFica R$25.\n\n${K}\n\nManda o comprovante!`, K);
+    assert.ok(longa.includes(K));
+    assert.ok(longa.every((p) => p === K || !p.includes(K)));
+    assert.deepStrictEqual(dividir('a\n\nb', K), ['a', 'b']);
+  });
   await teste('dividir em no máximo 3 mensagens', () => {
     assert.deepStrictEqual(dividir('a\n\nb'), ['a', 'b']);
     assert.strictEqual(dividir('a\n\nb\n\nc\n\nd\n\ne').length, 3);
@@ -359,11 +369,14 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     const i1 = pr.indexOf('1. Foto do cliente');
     const i2 = pr.indexOf('2. Preço e quantidade');
     const i3 = pr.indexOf('3. Detalhes da foto');
-    const i5 = pr.indexOf('5. Pix');
+    const i5 = pr.indexOf('4. Pix');
     assert.ok(i1 > 0 && i1 < i2 && i2 < i3 && i3 < i5);
     assert.ok(pr.includes('antes de pedir o Pix, pergunte como ele quer a foto'));
-    assert.ok(pr.includes('cenário, uma roupa'));
-    assert.ok(pr.includes('ele pode mandar um áudio'));
+    assert.ok(pr.includes('Um cenário específico, uma roupa diferente'));
+    assert.ok(pr.includes('mude algo no cabelo'));
+    assert.ok(pr.includes('em uma única mensagem'));
+    assert.ok(pr.includes('Não repita o pedido dele nem peça confirmação de novo'));
+    assert.ok(pr.includes('pode me mandar um áudio explicando'));
   });
   await teste('manual: prazo (30 min a 1 h) e 2 refações só se o cliente perguntar', async () => {
     const pr = PR();
@@ -374,7 +387,9 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
   });
   await teste('manual: Pix em 3 mensagens, comprovante vira [[PAGAMENTO]] e nunca confirma pagamento', async () => {
     const pr = PR();
-    assert.ok(pr.includes('só a chave, sozinha na mensagem'));
+    assert.ok(pr.includes('MENSAGENS SEPARADAS'));
+    assert.ok(pr.includes('SÓ a chave, sozinha na mensagem'));
+    assert.ok(pr.includes('Nunca escreva a chave dentro de uma frase'));
     assert.ok(pr.includes('peça que mande o comprovante'));
     assert.ok(pr.includes('Recebi, vou conferir aqui e já te aviso!'));
     assert.ok(pr.includes('NUNCA confirma que o pagamento caiu'));

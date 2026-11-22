@@ -101,10 +101,24 @@ function tirarMarcacoes(texto) {
 }
 
 // Quebra a resposta em até 3 mensagens (parágrafos), como uma pessoa mandaria.
-function dividir(texto) {
-  const partes = texto.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (partes.length <= 3) return partes;
-  return [partes[0], partes[1], partes.slice(2).join('\n\n')];
+// Se a chave Pix estiver no texto, ela SEMPRE sai sozinha numa mensagem própria (pra copiar fácil),
+// e nesse caso pode haver até 5 mensagens.
+function dividir(texto, pixChave) {
+  let partes = texto.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const chave = String(pixChave || '').trim();
+  let max = 3;
+  if (chave && partes.some((p) => p.includes(chave))) {
+    max = 5;
+    partes = partes.flatMap((p) => {
+      if (p === chave || !p.includes(chave)) return [p];
+      const i = p.indexOf(chave);
+      const antes = p.slice(0, i).replace(/[\s:–—-]+$/, '').trim();
+      const depois = p.slice(i + chave.length).replace(/^[\s.,;:–—-]+/, '').trim();
+      return [antes, chave, depois].filter(Boolean);
+    });
+  }
+  if (partes.length <= max) return partes;
+  return [...partes.slice(0, max - 1), partes.slice(max - 1).join('\n\n')];
 }
 
 function criarVendas(opcoes = {}) {
@@ -343,7 +357,7 @@ function criarVendas(opcoes = {}) {
   // ---------- envio "humanizado" ----------
   async function enviar(sock, jid, texto) {
     const chat = chatDe(jid);
-    for (const parte of dividir(texto)) {
+    for (const parte of dividir(texto, env.PIX_CHAVE)) {
       try { await sock.sendPresenceUpdate('composing', jid); } catch (e) { /* ok */ }
       await dormir(Math.min(5000, Math.max(1200, 600 + parte.length * 35)));
       const id = gerarId();
