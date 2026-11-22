@@ -43,12 +43,12 @@ const PARAR = /\b(n[aã]o quero|n[aã]o tenho interesse|sem interesse|n[aã]o pr
 // Textos dos lembretes (só pra quem já conversou e sumiu). {n} = primeiro nome, quando dá pra usar.
 const LEMBRETES = [
   [
-    'Opa{, n}! Seu pedido tá te aguardando por aqui 😊 Vamos dar continuidade?',
-    '{N}, tudo certo? Ainda dá pra fazer o seu pedido. Se quiser seguir, é só me falar que eu já organizo tudo por aqui!',
+    'Opa{, n}! Sua foto de estúdio tá te aguardando por aqui 😊 Vamos dar continuidade?',
+    '{N}, tudo certo? Ainda dá pra fazer a sua foto de estúdio. Se quiser seguir, é só me falar que eu já organizo tudo por aqui!',
   ],
   [
-    '{N}, passando só pra avisar que o seu pedido continua de pé por aqui. Se ainda tiver interesse, é só me chamar, tá? Se não for o momento, sem problema!',
-    'Oi{ n}! Ainda consigo fazer o seu pedido. Se quiser seguir, me chama aqui. Se não for agora, tudo bem, qualquer coisa é só falar!',
+    '{N}, passando só pra avisar que a sua foto de estúdio continua de pé por aqui. Se ainda tiver interesse, é só me chamar, tá? Se não for o momento, sem problema!',
+    'Oi{ n}! Ainda consigo fazer a sua foto de estúdio. Se quiser seguir, me chama aqui. Se não for agora, tudo bem, qualquer coisa é só falar!',
   ],
 ];
 const primeiroNome = (nome) => {
@@ -240,7 +240,7 @@ function criarVendas(opcoes = {}) {
       form.append('language', 'pt');
       form.append('temperature', '0');
       form.append('response_format', 'json');
-      form.append('prompt', 'Conversa sobre pedido de vídeo ou imagem feitos com IA, Estúdio Digital, Pix, Instagram, TikTok.');
+      form.append('prompt', 'Conversa sobre pedido de foto de estúdio feita com IA, Estúdio Digital, Pix, Instagram.');
       const r = await fetchImpl(API_GROQ, { method: 'POST', headers: { Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: form });
       if (!r.ok) throw new Error('Groq ' + r.status);
       const j = await r.json();

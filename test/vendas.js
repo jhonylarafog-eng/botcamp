@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { criarVendas, classificar, tirarMarcacoes, dividir } = require('../src/vendas/vendas');
-const { precoVideo, tabelaTexto } = require('../src/vendas/precos');
+const { precoFotos, tabelaTexto } = require('../src/vendas/precos');
 const { montarPrompt } = require('../src/vendas/prompt');
 
 let ok = 0;
@@ -70,25 +70,19 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
 
 (async () => {
   console.log('Preços');
-  await teste('faixas do dono batem nos pontos', () => {
-    assert.strictEqual(precoVideo(10), 30);
-    assert.strictEqual(precoVideo(15), 30);
-    assert.strictEqual(precoVideo(30), 38);
-    assert.strictEqual(precoVideo(45), 45);
-    assert.strictEqual(precoVideo(90), 60);
-    assert.strictEqual(precoVideo(120), 80);
-    assert.strictEqual(precoVideo(180), 100);
-    assert.strictEqual(precoVideo(300), 150);
+  await teste('preço das fotos: 1 = 7,99, álbum de 5 = 25, fora disso sem preço automático', () => {
+    assert.strictEqual(precoFotos(1), 7.99);
+    assert.strictEqual(precoFotos(2), 15.98);
+    assert.strictEqual(precoFotos(3), 23.97);
+    assert.strictEqual(precoFotos(4), 31.96);
+    assert.strictEqual(precoFotos(5), 25);
+    assert.strictEqual(precoFotos(6), null);
+    assert.strictEqual(precoFotos(0), null);
   });
-  await teste('17s não pula de R$30 pra R$45 (sobe aos poucos)', () => {
-    assert.strictEqual(precoVideo(17), 31);
-    assert.ok(precoVideo(17) < 35);
+  await teste('a partir de 4 fotos o álbum de 5 sai mais barato', () => {
+    assert.ok(precoFotos(4) > precoFotos(5));
+    assert.ok(precoFotos(3) < precoFotos(5));
   });
-  await teste('preço nunca diminui quando a duração aumenta', () => {
-    let ant = 0;
-    for (let s = 1; s <= 400; s++) { const p = precoVideo(s); assert.ok(p >= ant, `caiu em ${s}s`); ant = p; }
-  });
-  await teste('muito diálogo soma R$15', () => assert.strictEqual(precoVideo(30, true), 53));
   await teste('prompt tem tabela, Pix e regra de nunca confirmar pagamento', () => {
     const p = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
     assert.ok(p.includes(tabelaTexto()));
@@ -320,38 +314,75 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(chamadas.telegram[0].text.includes('GEMINI_API_KEY'));
   });
 
-  await teste('manual: pede só o material necessário depois do "paguei", na mesma resposta', async () => {
-    const pr = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
-    assert.ok(pr.includes('Material do pedido'));
-    assert.ok(pr.includes('na MESMA resposta'));
-    assert.ok(pr.includes('Se o pedido não envolve fotos'));
-    assert.ok(pr.includes('se ainda falta algum material'));
+  const PR = () => montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
+  await teste('manual: só vende foto de estúdio, sem nada de vídeo ou tabela por duração', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('foto profissional de estúdio'));
+    assert.ok(pr.includes('É só isso que vendemos no momento'));
+    assert.ok(!pr.includes('PEDIDO de VÍDEO'));
+    assert.ok(!pr.includes('Tabela de preços de vídeo'));
+    assert.ok(!pr.includes('R$150'));
+    assert.ok(!pr.includes('muito diálogo'));
   });
-  await teste('manual: imagem pode ser material ou comprovante e o atendente reconhece e segue o fluxo', async () => {
-    const pr = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
+  await teste('manual: primeira resposta pede a foto do cliente (rosto visível, boa iluminação)', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('Vamos criar a sua foto de estúdio'));
+    assert.ok(pr.includes('A única coisa que eu vou precisar é de uma foto sua'));
+    assert.ok(pr.includes('mostre bem o seu rosto'));
+    assert.ok(pr.includes('boa iluminação'));
+    assert.ok(pr.includes('Me manda a sua melhor foto'));
+  });
+  await teste('manual: preço R$7,99 e álbum de 5 por R$25 (R$5 cada), com a tabela de 1 a 4 fotos', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('R$7,99'));
+    assert.ok(pr.includes('álbum completo com 5 fotos por somente R$25'));
+    assert.ok(pr.includes('sai R$5 cada'));
+    assert.ok(pr.includes(tabelaTexto()));
+    assert.ok(pr.includes('2 fotos = R$15,98'));
+    assert.ok(pr.includes('3 fotos = R$23,97'));
+    assert.ok(pr.includes('Nunca dê desconto'));
+    assert.ok(pr.includes('Mais de 5 fotos'));
+  });
+  await teste('manual: ordem é foto, preço, detalhes da foto (cenário, roupa, áudio) e só depois o Pix', async () => {
+    const pr = PR();
+    const i1 = pr.indexOf('1. Foto do cliente');
+    const i2 = pr.indexOf('2. Preço e quantidade');
+    const i3 = pr.indexOf('3. Detalhes da foto');
+    const i5 = pr.indexOf('5. Pix');
+    assert.ok(i1 > 0 && i1 < i2 && i2 < i3 && i3 < i5);
+    assert.ok(pr.includes('antes de pedir o Pix, pergunte como ele quer a foto'));
+    assert.ok(pr.includes('cenário, uma roupa'));
+    assert.ok(pr.includes('ele pode mandar um áudio'));
+  });
+  await teste('manual: prazo (30 min a 1 h) e 2 refações só se o cliente perguntar', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('Prazo e ajustes (só se o cliente perguntar)'));
+    assert.ok(pr.includes('Não fale disso por conta própria'));
+    assert.ok(pr.includes('de 30 minutos a 1 hora'));
+    assert.ok(pr.includes('refazer até 2 vezes'));
+  });
+  await teste('manual: Pix em 3 mensagens, comprovante vira [[PAGAMENTO]] e nunca confirma pagamento', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('só a chave, sozinha na mensagem'));
+    assert.ok(pr.includes('peça que mande o comprovante'));
+    assert.ok(pr.includes('Recebi, vou conferir aqui e já te aviso!'));
+    assert.ok(pr.includes('NUNCA confirma que o pagamento caiu'));
+    assert.ok(pr.includes('[[PAGAMENTO|resumo curto: quantidade'));
+  });
+  await teste('manual: imagem pode ser foto do cliente ou comprovante e o atendente reconhece e segue o fluxo', async () => {
+    const pr = PR();
     assert.ok(pr.includes('Imagens e arquivos que o cliente manda'));
     assert.ok(pr.includes('QUALQUER momento'));
     assert.ok(pr.includes('Não trate toda imagem como comprovante'));
     assert.ok(pr.includes('[imagem enviada pelo cliente]'));
+    assert.ok(pr.includes('muito ruim'));
+    assert.ok(pr.includes('uma vez só'));
     assert.ok(!pr.includes('[comprovante/imagem do cliente]'));
   });
-  await teste('foto antes do pagamento não vira "comprovante" no histórico', async () => {
-    const { v, sock, chamadas } = montar({ respostas: ['Que foto bacana! Vai ficar legal.', 'Fechado!'] });
-    await v.receber(sock, msgImagem());
-    await esperar();
-    await v.receber(sock, msgTexto('pode fechar'));
-    await esperar();
-    const hist = JSON.stringify(chamadas.claude[1].messages);
-    assert.ok(hist.includes('imagem enviada pelo cliente'));
-    assert.ok(!hist.includes('comprovante'));
-  });
-  await teste('manual: cliente que pergunta o preço antes de explicar o vídeo recebe a faixa R$30–R$120', async () => {
-    const pr = montarPrompt({ pixChave: 'pix@exemplo.com', pixNome: 'Fulano', agora: 'hoje' });
-    assert.ok(pr.includes('ANTES de você saber o que ele quer'));
-    assert.ok(pr.includes('entre R$30 e R$120'));
-    assert.ok(pr.includes('eu consigo te passar um valor mais exato'));
-    assert.ok(pr.includes('mais de 3 minutos'));
-    assert.ok(!pr.includes('nem faixas de preço'));
+  await teste('manual: se o cliente perguntar o preço antes de mandar a foto, responde direto', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('Se o cliente perguntar o preço antes de mandar a foto, responda direto'));
+    assert.ok(!pr.includes('entre R$30 e R$120'));
   });
   await teste('conversa salva em disco e recarregada', async () => {
     const a = montar();
@@ -378,7 +409,7 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     a.horas(1.5);
     assert.strictEqual(await a.v.verificarLembretes(), 1);
     assert.strictEqual(a.enviadas.length, 1);
-    assert.ok(/pedido/i.test(a.enviadas[0].texto));
+    assert.ok(/foto de estúdio/i.test(a.enviadas[0].texto));
     assert.ok(a.enviadas[0].texto.includes('Cliente'));
     assert.ok(a.v._estado().chats[JID].historico.at(-1).content.includes('[lembrete automático enviado'));
   });

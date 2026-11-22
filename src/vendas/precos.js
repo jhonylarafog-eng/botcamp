@@ -1,48 +1,31 @@
-// Tabela de preços de VÍDEO do Estúdio Digital (uso interno: o cliente só vê o preço final).
+// Preços das FOTOS DE ESTÚDIO do Estúdio Digital (o cliente sabe esses valores: estão no anúncio).
 //
-// Os valores abaixo são as faixas que o dono definiu; entre elas o preço sobe aos poucos
-// (interpolação), pra um pedido de 17s não pular de R$30 direto pra R$45.
-// Pra mudar um preço, edite só os PONTOS.
+// Pra mudar um preço, edite só as constantes abaixo.
 
-// [duração em segundos, preço em R$]: o preço vale pra essa duração; entre dois pontos, interpola.
-const PONTOS = [
-  [15, 30],   // até 15s            R$30
-  [30, 38],   // 16–30s             R$38
-  [45, 45],   // 31–45s             R$45
-  [90, 60],   // 46s–1min30         R$60
-  [120, 80],  // 1min30–2min        R$80
-  [180, 100], // 2–3min             R$100
-  [240, 150], // 3–4min (rampa)     até R$150
-];
-const TETO = 150;          // acima do último ponto: preço fixo
-const EXTRA_DIALOGO = 15;  // "muito diálogo" (personagens conversando a maior parte do vídeo)
+const PRECO_FOTO = 7.99;     // uma foto
+const FOTOS_ALBUM = 5;       // quantas fotos tem o álbum
+const PRECO_ALBUM = 25;      // álbum completo
 
-function precoVideo(segundos, muitoDialogo = false) {
-  const s = Math.max(1, Math.ceil(Number(segundos) || 0));
-  let base;
-  if (s <= PONTOS[0][0]) base = PONTOS[0][1];
-  else if (s >= PONTOS[PONTOS.length - 1][0]) base = TETO;
-  else {
-    for (let i = 1; i < PONTOS.length; i++) {
-      const [s1, p1] = PONTOS[i];
-      const [s0, p0] = PONTOS[i - 1];
-      if (s <= s1) {
-        base = Math.round(p0 + ((s - s0) / (s1 - s0)) * (p1 - p0));
-        break;
-      }
-    }
-  }
-  return base + (muitoDialogo ? EXTRA_DIALOGO : 0);
+// Valor em reais no jeito brasileiro (R$7,99 / R$25).
+const reais = (v) => 'R$' + (Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ','));
+
+// Preço de N fotos. 5 = álbum. Quantidade fora de 1 a 5 não tem preço automático (retorna null).
+function precoFotos(qtd) {
+  const n = Math.floor(Number(qtd) || 0);
+  if (n === FOTOS_ALBUM) return PRECO_ALBUM;
+  if (n >= 1 && n < FOTOS_ALBUM) return Math.round(n * PRECO_FOTO * 100) / 100;
+  return null;
 }
 
-const rotulo = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}min${s % 60 ? String(s % 60).padStart(2, '0') + 's' : ''}`);
-
-// Texto da tabela pro prompt: de 5 em 5 segundos até 1min, depois de 15 em 15 até 4min.
+// Texto da tabela pro prompt.
 function tabelaTexto() {
-  const duracoes = [];
-  for (let s = 5; s <= 60; s += 5) duracoes.push(s);
-  for (let s = 75; s <= 240; s += 15) duracoes.push(s);
-  return duracoes.map((s) => `${rotulo(s)} = R$${precoVideo(s)}`).join(' | ');
+  const linhas = [];
+  for (let n = 1; n < FOTOS_ALBUM; n++) {
+    const p = precoFotos(n);
+    linhas.push(`${n} ${n === 1 ? 'foto' : 'fotos'} = ${reais(p)}${p > PRECO_ALBUM ? ' (já passa do álbum: ofereça o álbum)' : ''}`);
+  }
+  linhas.push(`álbum com ${FOTOS_ALBUM} fotos = ${reais(PRECO_ALBUM)} (${reais(PRECO_ALBUM / FOTOS_ALBUM)} cada)`);
+  return linhas.join(' | ');
 }
 
-module.exports = { PONTOS, TETO, EXTRA_DIALOGO, precoVideo, tabelaTexto };
+module.exports = { PRECO_FOTO, FOTOS_ALBUM, PRECO_ALBUM, reais, precoFotos, tabelaTexto };
