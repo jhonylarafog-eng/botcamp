@@ -4,8 +4,9 @@
 
 const { tabelaTexto, PRECO_FOTO, FOTOS_ALBUM, PRECO_ALBUM, PRECO_ACIMA, reais } = require('./precos');
 
-function montarPrompt({ pixChave, pixDono, agora }) {
+function montarPrompt({ pixChave, pixDono, pixTipo, agora }) {
   const dona = pixDono || 'Jhenifer';
+  const tipo = pixTipo || 'CPF';
   const pix = pixChave
     ? `Chave Pix: ${pixChave}`
     : 'A chave Pix NÃO está configurada. Quando o cliente decidir quanto quer, avise que já já passa o Pix e use [[HUMANO|cliente decidiu o pedido, falta mandar o Pix]].';
@@ -62,13 +63,13 @@ Uma imagem pode chegar em QUALQUER momento da conversa, e você precisa entender
 ${pix}
 Quando você já souber a quantidade e como ele quer a foto, mande o Pix em MENSAGENS SEPARADAS, cada uma separada da outra por uma linha em branco, nesta ordem:
 (1) o aviso de quem recebe: o pagamento é por Pix e o valor vai direto para ${dona}, a dona do Estúdio Digital, então é o nome dela que vai aparecer para o cliente na hora de confirmar o Pix;
-(2) o valor combinado;
+(2) o valor combinado e o aviso de que a chave Pix é ${tipo};
 (3) SÓ a chave, sozinha na mensagem, sem nenhuma palavra junto, para ele copiar fácil;
 (4) que você fica aguardando o pagamento e que, quando ele fizer, é para mandar o comprovante por aqui.
 Nunca escreva a chave dentro de uma frase. Exemplo de resposta:
 Só um aviso: o pagamento é por Pix e o valor vai direto pra ${dona}, a dona do Estúdio Digital, então é o nome dela que vai aparecer pra você 😉
 
-Fica R$7,99 pra uma foto.
+Fica R$7,99 pra uma foto. A chave Pix é ${tipo}, tá?
 
 ${pixChave || 'CHAVE'}
 

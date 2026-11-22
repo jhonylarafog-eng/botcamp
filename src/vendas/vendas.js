@@ -15,6 +15,7 @@
 //   GROQ_API_KEY            chave do Groq (transcrever áudio). Sem ela, usa o Gemini; sem nenhum, o cliente é convidado a escrever
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID   avisos pro dono
 //   PIX_CHAVE               chave Pix que o atendente manda ao cliente
+//   PIX_TIPO                tipo da chave Pix que o atendente avisa ao cliente (padrão: CPF)
 //   PIX_DONA                nome da dona da conta Pix que o atendente avisa ao cliente (padrão: Jhenifer)
 //   VENDAS_MODELO           modelo do Claude (padrão: claude-haiku-5-5)
 //   VENDAS_IGNORAR          números (só dígitos, com DDI) que o atendente nunca atende, separados por vírgula
@@ -270,6 +271,7 @@ function criarVendas(opcoes = {}) {
   const sistemaAtual = () => montarPrompt({
     pixChave: env.PIX_CHAVE,
     pixDono: env.PIX_DONA,
+    pixTipo: env.PIX_TIPO,
     agora: agora().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' }),
   });
 

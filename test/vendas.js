@@ -409,6 +409,12 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(!pr.includes('em nome de'));
     assert.ok(montarPrompt({ pixChave: 'x', pixDono: 'Maria', agora: 'hoje' }).includes('direto para Maria, a dona'));
   });
+  await teste('manual: avisa que a chave Pix é CPF junto do valor (e dá pra trocar o tipo)', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('(2) o valor combinado e o aviso de que a chave Pix é CPF'));
+    assert.ok(pr.includes('Fica R$7,99 pra uma foto. A chave Pix é CPF, tá?'));
+    assert.ok(montarPrompt({ pixChave: 'x', pixTipo: 'telefone', agora: 'hoje' }).includes('a chave Pix é telefone'));
+  });
   await teste('manual: imagem pode ser foto do cliente ou comprovante e o atendente reconhece e segue o fluxo', async () => {
     const pr = PR();
     assert.ok(pr.includes('Imagens e arquivos que o cliente manda'));
