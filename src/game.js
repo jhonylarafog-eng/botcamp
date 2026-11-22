@@ -21,6 +21,7 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 (admin) /cancelar — cancela o campeonato
 
 *Zoeira*
+/filho — responda a mensagem de alguém (ou marque) pra fazer um filho com a pessoa
 /maisgay — escolhe o mais gay do dia (brincadeira)
 (admin) /ignorarbot — responda a mensagem de um bot (ou marque ele) pra ele nunca ser escolhido · /designorarbot desfaz
 /roubargrupo — rouba o grupo (é brincadeira, não acontece nada)
@@ -173,6 +174,12 @@ class Bot {
         const r = this.maisAtivoHoje(msg.chatId);
         if (!r) return say('🏳️‍🌈 Ainda não tenho ninguém pra escolher hoje. Conversem mais um pouco e tentem de novo!');
         return say(`🏳️‍🌈 O mais gay do dia é o ${tag(r.id)}!`, [r.id]);
+      }
+      case 'filho': { // brincadeira: responda a mensagem de alguém (ou marque) com /filho
+        const alvo = (msg.mentions || [])[0] || (msg.quoted && msg.quoted.senderId) || null;
+        if (!alvo) return say('Responda a mensagem de alguém com /filho (ou marque a pessoa: /filho @fulano).');
+        if (this.chaveId(alvo) === this.chaveId(msg.senderId)) return say('👶 Filho sozinho não dá, né? Responda a mensagem de outra pessoa.');
+        return say(`👶 ${tag(msg.senderId)} fez um filho com ${tag(alvo)}!`, [msg.senderId, alvo]);
       }
       case 'roubargrupo': // brincadeira: não muda nada no grupo, só manda a mensagem
         return say(`🏴‍☠️ O grupo foi roubado, e agora é do ${tag(msg.senderId)}!`, [msg.senderId]);

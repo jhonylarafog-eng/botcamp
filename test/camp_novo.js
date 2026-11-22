@@ -241,3 +241,17 @@ console.log('\n✅ camp_novo ok');
   assert.match(diz(id(1), '/maisgay'), /@5599888877770/);
   console.log('✅ ignorarbot ok');
 }
+
+// ---------- /filho ----------
+{
+  const { diz, ultimas, } = novo();
+  const h = novo();
+  assert.match(h.diz(id(1), '/filho'), /Responda a mensagem/);
+  let t = h.diz(id(1), '/filho', { quoted: { senderId: id(2) } });
+  assert.match(t, /👶 @5511900000001 fez um filho com @5511900000002!/);
+  assert.deepStrictEqual(h.ultimas[0].mentions, [id(1), id(2)]);
+  t = h.diz(id(1), '/filho', { mentions: [id(3)] });
+  assert.match(t, /@5511900000001 fez um filho com @5511900000003!/);
+  assert.match(h.diz(id(1), '/filho', { quoted: { senderId: id(1) } }), /sozinho não dá/);
+  console.log('✅ filho ok');
+}
