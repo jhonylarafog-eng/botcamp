@@ -690,12 +690,31 @@ class Bot {
     if (k < 2) {
       return say(`Precisa de pelo menos ${2 * camp.tamanho} jogadores pra sortear (tem ${jogadores.length}).`);
     }
-    const embaralhados = this.embaralhar(jogadores);
-    const clubes = this.embaralhar(camp.clubes).slice(0, k).map((c, i) => ({
-      nome: c.nome, apelidos: c.apelidos, cores: c.cores,
-      jogadores: embaralhados.slice(i * camp.tamanho, (i + 1) * camp.tamanho),
-    }));
-    const reservas = embaralhados.slice(k * camp.tamanho);
+    // Embaralha DE VERDADE: tenta várias vezes e fica com o sorteio que mais espalha a galera —
+    // ninguém no clube que escolheu e ninguém junto de quem já era do mesmo time (quando dá).
+    const origem = {}; // jogador -> clube que ele escolheu
+    for (const c of camp.clubes) for (const j of c.jogadores) origem[j] = c.nome;
+    let melhor = null;
+    for (let t = 0; t < 3000; t++) {
+      const emb = this.embaralhar(jogadores);
+      const cls = this.embaralhar(camp.clubes).slice(0, k).map((c, i) => ({
+        nome: c.nome, apelidos: c.apelidos, cores: c.cores,
+        jogadores: emb.slice(i * camp.tamanho, (i + 1) * camp.tamanho),
+      }));
+      let nota = 0;
+      for (const c of cls) {
+        const cont = {};
+        for (const j of c.jogadores) {
+          if (origem[j] === c.nome) nota += 3; // ficou no clube que escolheu
+          cont[origem[j]] = (cont[origem[j]] || 0) + 1;
+        }
+        for (const q of Object.values(cont)) nota += (q * (q - 1)) / 2; // pares que já eram do mesmo time
+      }
+      if (!melhor || nota < melhor.nota) melhor = { nota, cls, emb };
+      if (nota === 0) break;
+    }
+    const clubes = melhor.cls;
+    const reservas = melhor.emb.slice(k * camp.tamanho);
     camp.clubes = clubes;
     camp.numClubes = k;
     camp.status = 'andamento';

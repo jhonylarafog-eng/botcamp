@@ -277,3 +277,27 @@ console.log('\n✅ camp_novo ok');
   assert.ok(vistos.size > 1, 'deveria sortear entre vários');
   console.log('✅ lentinho ok');
 }
+
+// ---------- aleatório de verdade: espalha a galera ----------
+{
+  for (let seed0 = 1; seed0 <= 25; seed0++) {
+    let seed = seed0 * 7919;
+    const rng = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
+    const store = new Store(null);
+    const bot = new Bot(store, { rng });
+    const d = (q, t) => bot.handle({ chatId: CHAT, senderId: q, senderName: q, text: t, isAdmin: q === ADMIN });
+    d(ADMIN, '/iniciarcampx2aleatorio'); d(ADMIN, '2'); d(ADMIN, '5'); // 4 clubes, 8 jogadores
+    const c0 = store.data.campeonatos[store.data.ativos[CHAT]];
+    const nomes = c0.clubes.map((c) => c.nome);
+    const origem = {};
+    for (let n = 1; n <= 8; n++) { origem[id(n)] = nomes[Math.floor((n - 1) / 2)]; d(id(n), origem[id(n)]); }
+    const c = store.data.campeonatos[store.data.ativos[CHAT]];
+    assert.strictEqual(c.status, 'andamento');
+    for (const cl of c.clubes) {
+      const grupos = cl.jogadores.map((j) => origem[j]);
+      assert.ok(!grupos.includes(cl.nome), `seed ${seed0}: alguém ficou no clube que escolheu`);
+      assert.strictEqual(new Set(grupos).size, grupos.length, `seed ${seed0}: dois do mesmo time original juntos`);
+    }
+  }
+  console.log('✅ aleatório espalha ok');
+}
