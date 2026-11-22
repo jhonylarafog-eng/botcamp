@@ -206,3 +206,21 @@ console.log('\n✅ camp_novo ok');
   assert.strictEqual(JSON.stringify(store.data.campeonatos), antes);
   console.log('✅ roubargrupo ok');
 }
+
+// ---------- /maisgay: quem mais mandou mensagem hoje ----------
+{
+  const { diz, bot } = novo();
+  assert.match(diz(id(1), '/maisgay'), /Ainda não contei/);
+  [1, 2, 2, 3, 2, 3].forEach((n) => bot.contarMensagem(CHAT, id(n)));
+  const t = diz(id(1), '/maisgay');
+  assert.match(t, /mais gay do dia é o @5511900000002, com 3 mensagens/);
+  // outro grupo não mistura
+  bot.contarMensagem('outro@g.us', id(9));
+  assert.match(diz(id(1), '/maisgay'), /@5511900000002/);
+  // virou o dia: zera
+  const amanha = Date.now() + 36 * 3600 * 1000;
+  assert.strictEqual(bot.maisAtivoHoje(CHAT, amanha), null);
+  bot.contarMensagem(CHAT, id(5), amanha);
+  assert.strictEqual(bot.maisAtivoHoje(CHAT, amanha).id, id(5));
+  console.log('✅ maisgay ok');
+}

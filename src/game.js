@@ -21,6 +21,7 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 (admin) /cancelar — cancela o campeonato
 
 *Zoeira*
+/maisgay — marca quem mais mandou mensagem hoje (brincadeira)
 /roubargrupo — rouba o grupo (é brincadeira, não acontece nada)
 
 *Durante os jogos*
@@ -150,6 +151,11 @@ class Bot {
         if (!m) return say('Use assim: /iniciarcampx1, /iniciarcampx2 ou /iniciarcampx3 (admin: coloque *aleatorio* no final pro modo aleatório).');
         return this.iniciarCamp(ctx, camp, m[1], args);
       }
+      case 'maisgay': { // brincadeira: marca quem mais mandou mensagem hoje (a contagem começa quando o bot liga)
+        const r = this.maisAtivoHoje(msg.chatId);
+        if (!r) return say('🏳️‍🌈 Ainda não contei mensagens hoje. Conversem mais um pouco e tentem de novo!');
+        return say(`🏳️‍🌈 O mais gay do dia é o ${tag(r.id)}, com ${r.n} mensagens hoje!`, [r.id]);
+      }
       case 'roubargrupo': // brincadeira: não muda nada no grupo, só manda a mensagem
         return say(`🏴‍☠️ O grupo foi roubado, e agora é do ${tag(msg.senderId)}!`, [msg.senderId]);
       case 'listacamp': return this.listaCamp(ctx, camp);
@@ -235,6 +241,30 @@ class Bot {
 
   ehOrg(ctx, camp) {
     return ctx.msg.isAdmin || camp.organizador === ctx.msg.senderId;
+  }
+
+  // ---------- mensagens do dia (para o /maisgay) ----------
+  diaSP(ts = Date.now()) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(ts)); // AAAA-MM-DD
+  }
+
+  // chamado pelo conector a cada mensagem de pessoa no grupo
+  contarMensagem(chatId, senderId, ts = Date.now()) {
+    const d = this.store.data;
+    d.msgsDia = d.msgsDia || {};
+    const dia = this.diaSP(ts);
+    let g = d.msgsDia[chatId];
+    if (!g || g.dia !== dia) g = d.msgsDia[chatId] = { dia, n: {} }; // vira o dia: zera
+    g.n[senderId] = (g.n[senderId] || 0) + 1;
+    this.store.salvar();
+  }
+
+  maisAtivoHoje(chatId, ts = Date.now()) {
+    const g = (this.store.data.msgsDia || {})[chatId];
+    if (!g || g.dia !== this.diaSP(ts)) return null;
+    let melhor = null;
+    for (const [id, n] of Object.entries(g.n)) if (!melhor || n > melhor.n) melhor = { id, n };
+    return melhor;
   }
 
   registrar(ctx) {

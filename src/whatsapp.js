@@ -264,6 +264,12 @@ async function processar(sock, m) {
     return;
   }
 
+  // conta as mensagens do dia (texto, imagem, áudio, figurinha...) pro /maisgay
+  const corpo = desembrulhar(m.message);
+  if (['conversation', 'extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'stickerMessage', 'documentMessage', 'contactMessage', 'locationMessage', 'pollCreationMessage'].some((k) => corpo[k])) {
+    bot.contarMensagem(chatId, senderId);
+  }
+
   const { text, temImagem, mentions, quoted } = extrair(m.message);
   if (!text && !temImagem) return;
 
