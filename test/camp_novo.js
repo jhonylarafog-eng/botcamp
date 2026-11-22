@@ -255,3 +255,25 @@ console.log('\n✅ camp_novo ok');
   assert.match(h.diz(id(1), '/filho', { quoted: { senderId: id(1) } }), /sozinho não dá/);
   console.log('✅ filho ok');
 }
+
+// ---------- /lentinho: sorteio entre os 5 mais ativos do dia ----------
+{
+  const h = novo();
+  assert.match(h.diz(id(1), '/lentinho'), /Ainda não tenho ninguém/);
+  // 7 pessoas: id(1) com 7 msgs, id(2) com 6 ... id(7) com 1 → top 5 = id(1..5)
+  for (let n = 1; n <= 7; n++) for (let k = 0; k < 8 - n; k++) h.bot.contarMensagem(CHAT, id(n));
+  const BOT = '5599888877770@s.whatsapp.net';
+  for (let k = 0; k < 20; k++) h.bot.contarMensagem(CHAT, BOT);
+  h.store.data.ignorados = ['5599888877770'];
+  const vistos = new Set();
+  for (let i = 0; i < 60; i++) {
+    const t = h.diz(id(9), '/lentinho');
+    const m = t.match(/Quem mais rebolou lentinho pros cria foi o @(\d+)!/);
+    assert.ok(m, t);
+    vistos.add(m[1]);
+  }
+  const top5 = [1, 2, 3, 4, 5].map((n) => `55119000000${String(n).padStart(2, '0')}`);
+  for (const v of vistos) assert.ok(top5.includes(v), `${v} não está no top 5`);
+  assert.ok(vistos.size > 1, 'deveria sortear entre vários');
+  console.log('✅ lentinho ok');
+}

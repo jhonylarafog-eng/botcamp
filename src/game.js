@@ -21,6 +21,7 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 (admin) /cancelar — cancela o campeonato
 
 *Zoeira*
+/lentinho — sorteia quem mais rebolou lentinho pros cria (entre os mais ativos do dia)
 /filho — responda a mensagem de alguém (ou marque) pra fazer um filho com a pessoa
 /maisgay — escolhe o mais gay do dia (brincadeira)
 (admin) /ignorarbot — responda a mensagem de um bot (ou marque ele) pra ele nunca ser escolhido · /designorarbot desfaz
@@ -181,6 +182,12 @@ class Bot {
         if (this.chaveId(alvo) === this.chaveId(msg.senderId)) return say('👶 Filho sozinho não dá, né? Responda a mensagem de outra pessoa.');
         return say(`👶 ${tag(msg.senderId)} fez um filho com ${tag(alvo)}!`, [msg.senderId, alvo]);
       }
+      case 'lentinho': { // brincadeira: sorteia entre os 5 mais ativos do dia
+        const top = this.maisAtivosHoje(msg.chatId, 5);
+        if (!top.length) return say('💃 Ainda não tenho ninguém pra escolher hoje. Conversem mais um pouco e tentem de novo!');
+        const e = top[Math.floor(this.rng() * top.length)];
+        return say(`💃 Quem mais rebolou lentinho pros cria foi o ${tag(e.id)}!`, [e.id]);
+      }
       case 'roubargrupo': // brincadeira: não muda nada no grupo, só manda a mensagem
         return say(`🏴‍☠️ O grupo foi roubado, e agora é do ${tag(msg.senderId)}!`, [msg.senderId]);
       case 'listacamp': return this.listaCamp(ctx, camp);
@@ -286,6 +293,18 @@ class Bot {
 
   // id sem @domínio e sem :dispositivo, pra comparar
   chaveId(id) { return String(id).split('@')[0].split(':')[0]; }
+
+  // os N que mais mandaram mensagem hoje (sem os bots ignorados), do mais ativo pro menos
+  maisAtivosHoje(chatId, n = 5, ts = Date.now()) {
+    const g = (this.store.data.msgsDia || {})[chatId];
+    if (!g || g.dia !== this.diaSP(ts)) return [];
+    const ign = new Set(this.store.data.ignorados || []);
+    return Object.entries(g.n)
+      .filter(([id]) => !ign.has(this.chaveId(id)))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, n)
+      .map(([id, c]) => ({ id, n: c }));
+  }
 
   maisAtivoHoje(chatId, ts = Date.now()) {
     const g = (this.store.data.msgsDia || {})[chatId];
