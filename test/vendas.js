@@ -76,8 +76,13 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.strictEqual(precoFotos(3), 23.97);
     assert.strictEqual(precoFotos(4), 31.96);
     assert.strictEqual(precoFotos(5), 25);
-    assert.strictEqual(precoFotos(6), null);
     assert.strictEqual(precoFotos(0), null);
+  });
+  await teste('mais de 5 fotos: R$5 cada foto', () => {
+    assert.strictEqual(precoFotos(6), 30);
+    assert.strictEqual(precoFotos(8), 40);
+    assert.strictEqual(precoFotos(10), 50);
+    assert.strictEqual(precoFotos(15), 75);
   });
   await teste('a partir de 4 fotos o álbum de 5 sai mais barato', () => {
     assert.ok(precoFotos(4) > precoFotos(5));
@@ -341,7 +346,13 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(pr.includes('2 fotos = R$15,98'));
     assert.ok(pr.includes('3 fotos = R$23,97'));
     assert.ok(pr.includes('Nunca dê desconto'));
-    assert.ok(pr.includes('Mais de 5 fotos'));
+    assert.ok(pr.includes('Mais de 5 fotos: o preço padrão é R$5 cada foto'));
+    assert.ok(pr.includes('8 fotos = R$40'));
+    assert.ok(pr.includes('10 fotos = R$50'));
+    assert.ok(pr.includes('15 fotos = R$75'));
+    assert.ok(pr.includes('Só fale disso se o cliente pedir mais de 5 fotos'));
+    assert.ok(pr.includes('nunca puxe esse assunto por conta própria'));
+    assert.ok(!pr.includes('cliente quer mais de 5 fotos'));
   });
   await teste('manual: ordem é foto, preço, detalhes da foto (cenário, roupa, áudio) e só depois o Pix', async () => {
     const pr = PR();
