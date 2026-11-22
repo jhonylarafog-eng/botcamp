@@ -210,10 +210,10 @@ console.log('\n✅ camp_novo ok');
 // ---------- /maisgay: quem mais mandou mensagem hoje ----------
 {
   const { diz, bot } = novo();
-  assert.match(diz(id(1), '/maisgay'), /Ainda não contei/);
+  assert.match(diz(id(1), '/maisgay'), /Ainda não tenho ninguém/);
   [1, 2, 2, 3, 2, 3].forEach((n) => bot.contarMensagem(CHAT, id(n)));
   const t = diz(id(1), '/maisgay');
-  assert.match(t, /mais gay do dia é o @5511900000002, com 3 mensagens/);
+  assert.match(t, /mais gay do dia é o @5511900000002!/);
   // outro grupo não mistura
   bot.contarMensagem('outro@g.us', id(9));
   assert.match(diz(id(1), '/maisgay'), /@5511900000002/);

@@ -21,7 +21,7 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 (admin) /cancelar — cancela o campeonato
 
 *Zoeira*
-/maisgay — marca quem mais mandou mensagem hoje (brincadeira)
+/maisgay — escolhe o mais gay do dia (brincadeira)
 /roubargrupo — rouba o grupo (é brincadeira, não acontece nada)
 
 *Durante os jogos*
@@ -153,8 +153,8 @@ class Bot {
       }
       case 'maisgay': { // brincadeira: marca quem mais mandou mensagem hoje (a contagem começa quando o bot liga)
         const r = this.maisAtivoHoje(msg.chatId);
-        if (!r) return say('🏳️‍🌈 Ainda não contei mensagens hoje. Conversem mais um pouco e tentem de novo!');
-        return say(`🏳️‍🌈 O mais gay do dia é o ${tag(r.id)}, com ${r.n} mensagens hoje!`, [r.id]);
+        if (!r) return say('🏳️‍🌈 Ainda não tenho ninguém pra escolher hoje. Conversem mais um pouco e tentem de novo!');
+        return say(`🏳️‍🌈 O mais gay do dia é o ${tag(r.id)}!`, [r.id]);
       }
       case 'roubargrupo': // brincadeira: não muda nada no grupo, só manda a mensagem
         return say(`🏴‍☠️ O grupo foi roubado, e agora é do ${tag(msg.senderId)}!`, [msg.senderId]);
