@@ -396,15 +396,15 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(pr.includes('NUNCA confirma que o pagamento caiu'));
     assert.ok(pr.includes('[[PAGAMENTO|resumo curto: quantidade'));
   });
-  await teste('manual: Pix avisa que o valor vai direto pra Jennifer, a dona, antes do valor e da chave', async () => {
+  await teste('manual: Pix avisa que o valor vai direto pra Jhenifer, a dona, antes do valor e da chave', async () => {
     const pr = PR();
     const iAviso = pr.indexOf('(1) o aviso de quem recebe');
     const iValor = pr.indexOf('(2) o valor combinado');
     const iChave = pr.indexOf('(3) SÓ a chave');
     const iAguarda = pr.indexOf('(4) que você fica aguardando');
     assert.ok(iAviso > 0 && iAviso < iValor && iValor < iChave && iChave < iAguarda);
-    assert.ok(pr.includes('o valor vai direto para Jennifer, a dona do Estúdio Digital'));
-    assert.ok(pr.includes('vai direto pra Jennifer, a dona do Estúdio Digital, então é o nome dela'));
+    assert.ok(pr.includes('o valor vai direto para Jhenifer, a dona do Estúdio Digital'));
+    assert.ok(pr.includes('vai direto pra Jhenifer, a dona do Estúdio Digital, então é o nome dela'));
     assert.ok(pr.includes('só nesse momento, junto do Pix, não no meio da conversa'));
     assert.ok(!pr.includes('em nome de'));
     assert.ok(montarPrompt({ pixChave: 'x', pixDono: 'Maria', agora: 'hoje' }).includes('direto para Maria, a dona'));

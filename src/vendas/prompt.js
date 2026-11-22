@@ -5,7 +5,7 @@
 const { tabelaTexto, PRECO_FOTO, FOTOS_ALBUM, PRECO_ALBUM, PRECO_ACIMA, reais } = require('./precos');
 
 function montarPrompt({ pixChave, pixDono, agora }) {
-  const dona = pixDono || 'Jennifer';
+  const dona = pixDono || 'Jhenifer';
   const pix = pixChave
     ? `Chave Pix: ${pixChave}`
     : 'A chave Pix NÃO está configurada. Quando o cliente decidir quanto quer, avise que já já passa o Pix e use [[HUMANO|cliente decidiu o pedido, falta mandar o Pix]].';
