@@ -17,6 +17,7 @@ const AJUDA = `⚽ *Bot de Campeonato*
 Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 /listacamp — times livres e preenchidos (marca quem está em cada time)
 (admin) /removertime @fulano — tira alguém do time (ou responda a mensagem da pessoa com /removertime)
+(admin) /embaralhar — mistura os jogadores entre os times (qualquer modo, antes dos jogos começarem)
 (admin) /comecar — começa só com os times completos
 (admin) /cancelar — cancela o campeonato
 
@@ -188,6 +189,7 @@ class Bot {
         const e = top[Math.floor(this.rng() * top.length)];
         return say(`💃 Quem mais rebolou lentinho pros cria foi o ${tag(e.id)}!`, [e.id]);
       }
+      case 'embaralhar': return this.embaralharTimes(ctx, camp);
       case 'roubargrupo': // brincadeira: não muda nada no grupo, só manda a mensagem
         return say(`🏴‍☠️ O grupo foi roubado, e agora é do ${tag(msg.senderId)}!`, [msg.senderId]);
       case 'listacamp': return this.listaCamp(ctx, camp);
@@ -724,6 +726,59 @@ class Bot {
     if (reservas.length) txt += `\n\n🪑 Ficaram de fora (faltou gente pra completar): ${reservas.map(tag).join(' ')}`;
     say(txt, [...clubes.flatMap((c) => c.jogadores), ...reservas]);
     this.proximaRodada(ctx, camp, clubes.map((c) => c.nome));
+  }
+
+  // /embaralhar — admin/organizador: mistura os jogadores entre os times (qualquer modo).
+  // Vale nas inscrições, ou na rodada que ainda não começou (ninguém pediu "cria" ainda). Os confrontos de clubes não mudam.
+  embaralharTimes(ctx, camp) {
+    const { say } = ctx;
+    if (!camp || !['inscricoes', 'andamento'].includes(camp.status)) return say('Não tem campeonato com times pra embaralhar agora.');
+    if (!this.ehOrg(ctx, camp)) return say('Só admin (ou quem iniciou o camp) embaralha os times.');
+    const partidas = camp.status === 'andamento' ? this.partidasDaRodada(camp) : [];
+    if (partidas.some((p) => p.estado !== 'aguardando_cria' || p.pedido)) {
+      return say('Não dá mais pra embaralhar: já tem jogo em andamento nessa rodada.');
+    }
+    const jogadores = camp.clubes.flatMap((c) => c.jogadores);
+    const cheios = camp.clubes.filter((c) => c.jogadores.length > 0).length;
+    if (cheios < 2 || jogadores.length < 2) return say('Precisa de jogadores em pelo menos 2 times pra embaralhar.');
+
+    const origem = {};
+    for (const c of camp.clubes) for (const j of c.jogadores) origem[j] = c.nome;
+    const tamanhos = camp.clubes.map((c) => c.jogadores.length); // cada time mantém o mesmo número de vagas ocupadas
+    let melhor = null;
+    for (let t = 0; t < 3000; t++) {
+      const emb = this.embaralhar(jogadores);
+      let pos = 0;
+      let nota = 0;
+      const novo = camp.clubes.map((c, i) => {
+        const lista = emb.slice(pos, pos + tamanhos[i]);
+        pos += tamanhos[i];
+        const cont = {};
+        for (const j of lista) {
+          if (origem[j] === c.nome) nota += 3; // ficou onde estava
+          cont[origem[j]] = (cont[origem[j]] || 0) + 1;
+        }
+        for (const q of Object.values(cont)) nota += (q * (q - 1)) / 2; // pares que já eram do mesmo time
+        return lista;
+      });
+      if (!melhor || nota < melhor.nota) melhor = { nota, novo };
+      if (nota === 0) break;
+    }
+    camp.clubes.forEach((c, i) => { c.jogadores = melhor.novo[i]; });
+    // atualiza os confrontos (mesmos clubes, jogadores novos)
+    for (const p of partidas) {
+      for (const lado of [p.timeA, p.timeB]) {
+        const c = camp.clubes.find((x) => x.nome === lado.clube);
+        if (c) lado.jogadores = [...c.jogadores];
+      }
+    }
+    let txt = `🔀 *Times embaralhados!*\n\n` +
+      camp.clubes.filter((c) => c.jogadores.length).map((c) => `${c.cores || '⚽'} *${c.nome}* — ${c.jogadores.map(tag).join(' ')}`).join('\n');
+    if (partidas.length) {
+      txt += `\n\n*Confrontos* (os mesmos de antes, com os jogadores novos):\n` +
+        partidas.map((p) => `*${p.num})* ${p.timeA.clube} x ${p.timeB.clube}`).join('\n');
+    }
+    say(txt, jogadores);
   }
 
   textoInscricoes(camp) {

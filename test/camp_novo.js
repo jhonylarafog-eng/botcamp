@@ -301,3 +301,46 @@ console.log('\n✅ camp_novo ok');
   }
   console.log('✅ aleatório espalha ok');
 }
+
+// ---------- /embaralhar: qualquer modo, inscrições ou rodada ainda sem "cria" ----------
+{
+  for (let seed0 = 1; seed0 <= 15; seed0++) {
+    let seed = seed0 * 104729;
+    const rng = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
+    const store = new Store(null);
+    const bot = new Bot(store, { rng });
+    const d = (q, t, extra = {}) => bot.handle({ chatId: CHAT, senderId: q, senderName: q, text: t, isAdmin: q === ADMIN, ...extra });
+    const txt = (r) => r.map((x) => x.text).join('\n');
+    d(ADMIN, '/iniciarcampx2'); d(ADMIN, '2'); d(ADMIN, '5'); // NORMAL (não aleatório), 4 clubes
+    const camp = () => store.data.campeonatos[store.data.ativos[CHAT]];
+    const nomes = camp().clubes.map((c) => c.nome);
+    // só 3 times cheios + 1 vazio: embaralhar nas inscrições mantém o nº de jogadores por time
+    for (let n = 1; n <= 6; n++) d(id(n), nomes[Math.floor((n - 1) / 2)]);
+    assert.match(txt(d(id(1), '/embaralhar')), /Só admin/);
+    const antes = camp().clubes.map((c) => [...c.jogadores]);
+    assert.match(txt(d(ADMIN, '/embaralhar')), /Times embaralhados/);
+    const depois = camp().clubes.map((c) => c.jogadores);
+    assert.deepStrictEqual(depois.map((l) => l.length), antes.map((l) => l.length));
+    assert.deepStrictEqual(depois.flat().sort(), antes.flat().sort());
+    depois.forEach((l, i) => {
+      l.forEach((j) => assert.ok(!antes[i].includes(j), `seed ${seed0}: jogador continuou no mesmo time`));
+      if (l.length === 2) assert.ok(!(antes.some((a) => a.includes(l[0]) && a.includes(l[1]))), `seed ${seed0}: dupla se repetiu`);
+    });
+    // completa e começa (modo normal: confrontos criados direto)
+    d(id(7), nomes[3]); d(id(8), nomes[3]);
+    assert.strictEqual(camp().status, 'andamento');
+    const todosJ = () => camp().partidas.flatMap((x) => [...store.data.partidas[x].timeA.jogadores, ...store.data.partidas[x].timeB.jogadores]).sort();
+    const antesJ = todosJ();
+    const clubesAntes = camp().partidas.map((x) => `${store.data.partidas[x].timeA.clube}x${store.data.partidas[x].timeB.clube}`);
+    assert.match(txt(d(ADMIN, '/embaralhar')), /Confrontos/);
+    const p1 = store.data.partidas[camp().partidas[0]];
+    assert.deepStrictEqual(todosJ(), antesJ);
+    assert.deepStrictEqual(camp().partidas.map((x) => `${store.data.partidas[x].timeA.clube}x${store.data.partidas[x].timeB.clube}`), clubesAntes);
+    const clA = camp().clubes.find((c) => c.nome === p1.timeA.clube);
+    assert.deepStrictEqual(p1.timeA.jogadores, clA.jogadores);
+    // depois do "cria" não embaralha mais
+    d(p1.timeA.jogadores[0], 'cria');
+    assert.match(txt(d(ADMIN, '/embaralhar')), /já tem jogo em andamento/);
+  }
+  console.log('✅ embaralhar ok');
+}
