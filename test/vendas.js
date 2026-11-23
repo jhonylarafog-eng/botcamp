@@ -339,13 +339,29 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     assert.ok(!pr.includes('R$150'));
     assert.ok(!pr.includes('muito diálogo'));
   });
-  await teste('manual: primeira resposta pede a foto do cliente (rosto visível, boa iluminação)', async () => {
+  await teste('manual: primeira resposta explica como funciona e pergunta "Podemos continuar?" antes de pedir a foto', async () => {
     const pr = PR();
-    assert.ok(pr.includes('Vamos criar a sua foto de estúdio'));
-    assert.ok(pr.includes('A única coisa que eu vou precisar é de uma foto sua'));
+    const i = pr.indexOf('# Primeira resposta');
+    const j = pr.indexOf('# Como conduzir');
+    const sec = pr.slice(i, j);
+    assert.ok(sec.includes('NÃO peça a foto ainda'));
+    assert.ok(sec.includes('Tudo bem? Aqui é do Estúdio Digital'));
+    assert.ok(sec.includes('é muito simples'));
+    assert.ok(sec.includes('qualquer foto que tenha no seu celular'));
+    assert.ok(sec.includes('basta mostrar o seu rosto'));
+    assert.ok(sec.includes('cria uma foto de estúdio incrível'));
+    assert.ok(sec.includes('Podemos continuar?'));
+    assert.ok(sec.includes('três mensagens'));
+    assert.ok(sec.indexOf('Podemos continuar?') > sec.indexOf('é muito simples'));
+    assert.ok(!sec.includes('Me manda a sua melhor foto!'));
+  });
+  await teste('manual: depois do "pode continuar" pede a foto (rosto visível, boa iluminação)', async () => {
+    const pr = PR();
+    assert.ok(pr.includes('depois que ele disser que pode continuar, peça a foto'));
     assert.ok(pr.includes('mostre bem o seu rosto'));
     assert.ok(pr.includes('boa iluminação'));
-    assert.ok(pr.includes('Me manda a sua melhor foto'));
+    assert.ok(pr.includes('me manda a sua melhor foto'));
+    assert.ok(pr.includes('Não repita a explicação'));
   });
   await teste('manual: preço R$7,99 e álbum de 5 por R$25 (R$5 cada), com a tabela de 1 a 4 fotos', async () => {
     const pr = PR();
@@ -427,7 +443,7 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
   });
   await teste('manual: se o cliente perguntar o preço antes de mandar a foto, responde direto', async () => {
     const pr = PR();
-    assert.ok(pr.includes('Se o cliente perguntar o preço antes de mandar a foto, responda direto'));
+    assert.ok(pr.includes('Se o cliente perguntar o preço logo de cara, responda direto'));
     assert.ok(!pr.includes('entre R$30 e R$120'));
   });
   await teste('conversa salva em disco e recarregada', async () => {
