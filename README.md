@@ -105,3 +105,7 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 - **Números blindados:** a variável `PROTEGIDOS` (números separados por vírgula, só dígitos com DDI, ex.: `5511999998888,5511988887777`) lista quem **não pode ser castigado**.
 - **O número do bot precisa ser admin do grupo.** O bot não consegue rebaixar a dona (criadora) do grupo.
 - Os castigos ficam salvos no volume, então sobrevivem a reinícios.
+
+
+## Boas-vindas
+Quando alguém novo entra no grupo, o bot manda a foto de perfil da pessoa (se ela deixar ver; senão só o texto) com uma mensagem de boas-vindas marcando ela. Para desligar, coloque a variável `BOAS_VINDAS=nao` na Railway. O bot precisa estar no grupo (admin não é obrigatório).

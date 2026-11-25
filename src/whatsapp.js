@@ -21,6 +21,7 @@ const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Brow
 const { Store } = require('./store');
 const { Bot } = require('./game');
 const { criarVigia } = require('./castigo_wa');
+const { criarBoasVindas } = require('./boasvindas');
 const { criarVendas } = require('./vendas/vendas');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'dados');
@@ -237,6 +238,7 @@ const vendas = criarVendas({
 });
 vendas.iniciarLembretes();
 
+const boasVindas = criarBoasVindas({ lembrarEnviado });
 const vigia = criarVigia({ bot, store, lembrarEnviado });
 const { aplicarCastigo, varrerCastigos, varrerTodos, vigiarDarAdmin } = vigia;
 const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -362,6 +364,10 @@ async function conectar() {
   });
 
   // alguém foi promovido a admin: se estiver de castigo, tira de novo (vale pra qualquer um que promover, inclusive outro bot)
+  sock.ev.on('group-participants.update', (ev) => {
+    // gente nova no grupo: foto + boas-vindas
+    boasVindas.receber(sock, ev).catch((e) => console.error('[boas-vindas] erro:', e.message));
+  });
   sock.ev.on('group-participants.update', ({ id, action }) => {
     if (action !== 'promote') return;
     if (!bot.castigo.ativosDoChat(id).length) return;
