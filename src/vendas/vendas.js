@@ -390,9 +390,15 @@ function criarVendas(opcoes = {}) {
   }
 
   // Chamado pelo whatsapp.js pra toda mensagem de conversa privada. Volta rápido (só enfileira).
+  // quem está no meio de um jogo do grupo não conversa com o atendente (opcoes.bloqueado decide); erro = não bloqueia
+  async function bloqueado(jid) {
+    try { return !!(opcoes.bloqueado && await opcoes.bloqueado(jid)); } catch (e) { return false; }
+  }
+
   async function receber(sock, m) {
     if (!ativo || !m.message) return;
     const jid = m.key.remoteJid;
+    if (!m.key.fromMe && await bloqueado(jid)) return; // em jogo: o atendente "não existe".
     const c = classificar(m.message);
     if (!c) return;
 
@@ -581,6 +587,7 @@ function criarVendas(opcoes = {}) {
     for (const [jid, chat] of Object.entries(estado.chats)) {
       if (enviados >= 5 || (estado.lembretesDia || 0) >= lemDia) break;
       if (!elegivelLembrete(jid, chat)) continue;
+      if (await bloqueado(jid)) continue; // está jogando: o lembrete espera (não é gasto)
       let saiu = false;
       await naFila(jid, async () => {
         if (!elegivelLembrete(jid, chat)) return;

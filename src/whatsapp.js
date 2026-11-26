@@ -288,6 +288,13 @@ const vendas = criarVendas({
   gerarId: () => (baileys.generateMessageIDV2 || baileys.generateMessageID)(sockAtual?.user?.id),
   baixar: (m, sock) => downloadMediaMessage(m, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }),
   obterSock: () => (estado.conectado ? sockAtual : null),
+  // quem está jogando não recebe resposta nem lembrete do atendente enquanto o jogo rola
+  bloqueado: async (jid) => {
+    if (!sockAtual) return false;
+    const chats = bot.jogos.chatsComPrivado();
+    for (const c of chats) if (bot.jogos.estaJogando(c, await participanteDe(sockAtual, c, jid))) return true;
+    return false;
+  },
 });
 vendas.iniciarLembretes();
 
@@ -312,23 +319,27 @@ async function processar(sock, m) {
   if (!m.message) return;
   if (m.key.fromMe && enviados.has(m.key.id)) return;
   const chatId = m.key.remoteJid;
-  // comando de jogo no privado (/matar, /salvar, /investigar, /meupapel, /meulugar) de quem está jogando: vai pro jogo, não pro atendente
+  // conversa privada de quem está jogando (Cidade Dorme / Adivinha o Lugar): comandos do jogo vão pro jogo
+  // e o resto NÃO vai pro atendente de vendas (pra quem joga, o atendente não existe até o jogo acabar)
   if (!m.key.fromMe && chatId && !chatId.endsWith('@g.us') && !chatId.endsWith('@broadcast')) {
     try {
-      const texto = (extrair(m.message).text || '').trim();
-      const chats = texto.startsWith(PREFIX) ? bot.jogos.chatsComPrivado() : [];
+      const chats = bot.jogos.chatsComPrivado();
       if (chats.length) {
+        const texto = (extrair(m.message).text || '').trim();
         const tentativas = [];
         for (const c of chats) tentativas.push({ chatId: c, formas: await participanteDe(sock, c, chatId) });
-        const rs = bot.privado({ tentativas, text: '/' + texto.slice(PREFIX.length) }); // o jogo sempre lê com "/"
-        console.log(`[jogos] comando no privado: ${texto.split(/\s/)[0]} → ${rs ? 'tratado (' + rs.length + ' resposta(s))' : 'ignorado (não está em jogo)'}`);
-        if (rs) {
-          // respostas ao próprio jogador vão para o mesmo chat em que ele escreveu
-          const meus = new Set(tentativas.flatMap((t) => t.formas || []).map((f) => String(f).split('@')[0].split(':')[0]));
-          for (const r of rs) if (r.privadoPara && meus.has(String(r.privadoPara).split('@')[0].split(':')[0])) r.destino = chatId;
-          await enviarRespostas(sock, rs);
-          return;
+        if (texto.startsWith(PREFIX)) {
+          const rs = bot.privado({ tentativas, text: '/' + texto.slice(PREFIX.length) }); // o jogo sempre lê com "/"
+          console.log(`[jogos] comando no privado: ${texto.split(/\s/)[0]} → ${rs ? 'tratado (' + rs.length + ' resposta(s))' : 'ignorado (não está em jogo)'}`);
+          if (rs) {
+            // respostas ao próprio jogador vão para o mesmo chat em que ele escreveu
+            const meus = new Set(tentativas.flatMap((t) => t.formas || []).map((f) => String(f).split('@')[0].split(':')[0]));
+            for (const r of rs) if (r.privadoPara && meus.has(String(r.privadoPara).split('@')[0].split(':')[0])) r.destino = chatId;
+            await enviarRespostas(sock, rs);
+            return;
+          }
         }
+        if (tentativas.some((t) => bot.jogos.estaJogando(t.chatId, t.formas))) return; // jogando: atendente fica fora
       }
     } catch (e) {
       console.error('[jogos] erro no privado:', e.message);

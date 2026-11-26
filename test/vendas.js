@@ -14,7 +14,7 @@ async function teste(nome, fn) {
 const esperar = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- ambiente simulado ----------
-function montar({ respostas = [], env = {}, falhaClaude = false, inicio = null } = {}) {
+function montar({ respostas = [], env = {}, falhaClaude = false, inicio = null, bloqueado = null } = {}) {
   const relogio = { t: inicio ? new Date(inicio).getTime() : null };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vendas-'));
   const chamadas = { claude: [], groq: [], gemini: [], telegram: [] };
@@ -55,6 +55,7 @@ function montar({ respostas = [], env = {}, falhaClaude = false, inicio = null }
     dataDir: dir, fetch, dormir: async () => {}, log: silencio,
     agora: () => new Date(relogio.t !== null ? relogio.t : Date.now()),
     obterSock: () => sock,
+    bloqueado,
     gerarId: () => 'ID' + (++n),
     baixar: async () => Buffer.from('arquivo-falso'),
     env: { VENDAS_ATIVO: 'sim', ANTHROPIC_API_KEY: 'k', GROQ_API_KEY: 'g', TELEGRAM_BOT_TOKEN: 't', TELEGRAM_CHAT_ID: '1', PIX_CHAVE: 'pix@exemplo.com', VENDAS_ESPERA_MS: '0', ...env },
@@ -530,6 +531,36 @@ const msgDono = (texto) => ({ key: { remoteJid: JID, id: 'D' + Math.random(), fr
     const a = await conversarEsumir({ env: { VENDAS_LEMBRETES_DIA: '0' } });
     a.horas(5);
     assert.strictEqual(await a.v.verificarLembretes(), 0);
+  });
+
+  // ---------- quem está jogando não conversa com o atendente ----------
+  await teste('em jogo: o atendente não responde; fora do jogo volta a responder', async () => {
+    let jogando = true;
+    const a = montar({ respostas: ['oi! tudo bem?'], bloqueado: async () => jogando });
+    await a.v.receber(a.sock, msgTexto('oi'));
+    await esperar();
+    assert.strictEqual(a.enviadas.length, 0, 'calado durante o jogo');
+    assert.strictEqual(a.chamadas.claude.length + a.chamadas.gemini.length, 0, 'nem chamou a IA');
+    jogando = false;
+    await a.v.receber(a.sock, msgTexto('oi de novo'));
+    await esperar();
+    assert.ok(a.enviadas.length >= 1, 'respondeu depois do jogo');
+  });
+  await teste('em jogo: o lembrete automático espera e sai depois do jogo', async () => {
+    let jogando = false;
+    const a = await conversarEsumir({ bloqueado: async () => jogando });
+    a.horas(4);
+    jogando = true;
+    assert.strictEqual(await a.v.verificarLembretes(), 0);
+    assert.strictEqual(a.enviadas.length, 0);
+    jogando = false;
+    assert.strictEqual(await a.v.verificarLembretes(), 1, 'lembrete não foi gasto');
+  });
+  await teste('erro na checagem do jogo não bloqueia o atendente', async () => {
+    const a = montar({ respostas: ['oi!'], bloqueado: async () => { throw new Error('falhou'); } });
+    await a.v.receber(a.sock, msgTexto('oi'));
+    await esperar();
+    assert.ok(a.enviadas.length >= 1);
   });
 
   console.log(`\n${ok} testes de vendas ok`);

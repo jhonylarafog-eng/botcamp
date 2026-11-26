@@ -264,6 +264,33 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   h.diz(ADMIN, '/cancelarjogo');
 }
 
+// ---------- quem joga fica fora do atendente (estaJogando) ----------
+{
+  const h = novo();
+  let agora = 1_000_000;
+  h.bot.jogos.agora = () => agora;
+  h.diz(ADMIN, '/cidadedorme');
+  for (let i = 1; i <= 5; i++) h.diz(id(i), 'eu');
+  assert.ok(!h.bot.jogos.estaJogando(CHAT, [id(1)]), 'no lobby ainda não cala o atendente');
+  h.diz(ADMIN, '/iniciarjogo');
+  assert.ok(h.bot.jogos.estaJogando(CHAT, [id(1)]), 'jogando: calado');
+  assert.ok(h.bot.jogos.estaJogando(CHAT, ['999@lid', id(3)]), 'qualquer forma do id vale');
+  assert.ok(!h.bot.jogos.estaJogando(CHAT, [id(50)]), 'quem não joga fala com o atendente');
+  h.g().jogadores[0].vivo = false;
+  assert.ok(h.bot.jogos.estaJogando(CHAT, [h.g().jogadores[0].id]), 'morto continua no jogo');
+  agora += 5 * 3600_000;
+  assert.ok(!h.bot.jogos.estaJogando(CHAT, [id(1)]), 'jogo parado há horas deixa de calar o atendente');
+  agora -= 5 * 3600_000;
+  h.diz(ADMIN, '/cancelarjogo');
+  assert.ok(!h.bot.jogos.estaJogando(CHAT, [id(1)]), 'acabou o jogo: atendente volta');
+}
+// quiz não cala o atendente (não usa privado)
+{
+  const h = novo();
+  h.diz(ADMIN, '/quiz 3');
+  assert.deepStrictEqual(h.bot.jogos.chatsComPrivado(), []);
+}
+
 // ---------- ajuda ----------
 {
   const h = novo();

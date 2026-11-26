@@ -18,6 +18,7 @@ const TEMPO_NOITE = 90_000;
 const TEMPO_DIA = 120_000;
 const TEMPO_VEZ = 150_000;
 const MAX = { cidade: 20, lugares: 12 };
+const IDADE_MAX_JOGO = 4 * 3600_000; // jogo parado há mais que isso deixa de calar o atendente
 
 const PAPEIS = {
   assassino: { nome: 'ASSASSINO', emoji: '🔪' },
@@ -113,10 +114,20 @@ class Jogos {
   }
 
   // chats com jogo em que os jogadores podem mandar comandos no privado
+  // (só jogos que já começaram e não estão velhos demais)
   chatsComPrivado() {
+    const t = this.agora();
     return Object.entries(this.todos())
-      .filter(([, g]) => g.tipo !== 'quiz' && g.fase !== 'inscricoes')
+      .filter(([, g]) => g.tipo !== 'quiz' && g.fase !== 'inscricoes' && t - (g.inicio || t) < IDADE_MAX_JOGO)
       .map(([chatId]) => chatId);
+  }
+
+  // este participante (formas = ids equivalentes dele no grupo) está jogando agora? Vale pra vivo e morto.
+  estaJogando(chatId, formas) {
+    if (!this.chatsComPrivado().includes(chatId)) return false;
+    const g = this.get(chatId);
+    const f = new Set((formas || []).map(chave));
+    return (g.jogadores || []).some((p) => f.has(chave(p.id || p)));
   }
 
   ranking(g, titulo) {
@@ -415,6 +426,7 @@ class Jogos {
     ]);
     g.jogadores.forEach((p, i) => { p.papel = papeis[i]; p.vivo = true; });
     g.fase = 'noite';
+    g.inicio = this.agora();
     g.rodada = 1;
     g.noite = { mata: {}, salva: null, investiga: null };
     g.votos = {};
@@ -586,6 +598,7 @@ class Jogos {
     g.vez = 0;
     g.pontos = {};
     g.fase = 'jogando';
+    g.inicio = this.agora();
     const rs = [this.say(chatId,
       `🕵️ *ADIVINHA O LUGAR — COMEÇOU!* 🕵️\n${SEP}\n` +
       `📩 Cada um recebeu o seu *lugar secreto no privado* (se não chegou, mande /meulugar pra mim no privado).\n\n` +
