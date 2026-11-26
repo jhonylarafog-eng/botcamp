@@ -8,6 +8,7 @@ const rank = require('./rankings');
 const { Contagem } = require('./contagem');
 const { Puskas } = require('./puskas');
 const { Castigo } = require('./castigo');
+const { Jogos } = require('./jogos');
 
 const AJUDA = `⚽ *Bot de Campeonato*
 
@@ -21,6 +22,12 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 (admin) /embaralhar — mistura os jogadores entre os times (qualquer modo, antes dos jogos começarem)
 (admin) /comecar — começa só com os times completos
 (admin) /cancelar — cancela o campeonato
+
+*Jogos* 🎮
+/quiz [N] — (admin) quiz de futebol: o bot pergunta, o primeiro a acertar ganha ponto (padrão 10 perguntas)
+/cidadedorme — (admin) abre a Cidade Dorme: *eu* pra entrar, /iniciarjogo pra começar. Papéis e ações da noite no privado (/matar N, /salvar N, /investigar N); de dia /votar N
+/lugares — (admin) Adivinha o Lugar: cada um recebe um lugar secreto no privado e descreve sem dizer o nome; quem adivinhar mais, vence
+/entrar /sairjogo — entra ou sai da lista · /pular (quiz/lugares) · /apurar (admin, fecha a votação) · /cancelarjogo (admin)
 
 *Zoeira*
 /lentinho — sorteia quem mais rebolou lentinho pros cria (entre os mais ativos do dia)
@@ -76,6 +83,19 @@ class Bot {
     this.puskas = new Puskas(store, { prefix, dataDir, agora });
     this.castigo = new Castigo(store, { agora, protegidos });
     this.contagem = new Contagem(store, { prefix });
+    this.jogos = new Jogos(store, { rng, agora }); // Quiz, Cidade Dorme, Adivinha o Lugar
+  }
+
+  // comando recebido no PRIVADO de um jogador (Cidade Dorme / Adivinha o Lugar). Devolve respostas, ou null se não for com a gente.
+  privado(dados) {
+    try {
+      const rs = this.jogos.privado(dados);
+      this.store.salvar();
+      return rs;
+    } catch (e) {
+      console.error('Erro no privado do jogo:', e);
+      return null;
+    }
   }
 
   // ---------- entrada ----------
@@ -91,7 +111,8 @@ class Bot {
     const castigo = (dados) => out.push({ chatId: msg.chatId, castigo: dados });
     // sayAdmins: o conector acrescenta a marcação de todos os admins do grupo no fim da mensagem
     const sayAdmins = (text, mentions = []) => out.push({ chatId: msg.chatId, text, mentions, admins: true });
-    const ctx = { msg, say, sayVideo, grupo, castigo, sayAdmins };
+    const push = (rs) => rs.forEach((r) => out.push(r)); // respostas já prontas (jogos)
+    const ctx = { msg, say, sayVideo, grupo, castigo, sayAdmins, push };
     try {
       this._handle(ctx);
     } catch (e) {
@@ -120,6 +141,8 @@ class Bot {
     const text = String(msg.text || '').trim();
     if (!text) return;
     const camp = this.campAtivo(msg.chatId);
+    // jogos (quiz, cidade dorme, lugares): respostas, palpites e "eu" nas inscrições
+    if (!text.startsWith(this.prefix) && this.jogos.antes(ctx, text)) return;
 
     if (text.startsWith(this.prefix) && text.length > 1) {
       // separa o comando dos argumentos preservando as quebras de linha dos argumentos
@@ -154,6 +177,7 @@ class Bot {
     if (limparJunto) return this.puskas.limpar_vencedores(ctx, limparJunto[1] || args);
     const votarJunto = cmd.match(/^votarpuskas(\d+)$/);
     if (votarJunto) return this.puskas.votarTexto(ctx, votarJunto[1]);
+    if (this.jogos.comando(ctx, cmd, args)) return; // /quiz, /cidadedorme, /lugares, /entrar, /votar...
     const mc = cmd.match(/^iniciarcamp(x[123])(aleatorio)?$/);
     if (mc) return this.iniciarCamp(ctx, camp, mc[1], `${mc[2] || ''} ${args}`);
     const ma = cmd.match(/^(?:iniciar)?campaberto(x[123])$/);

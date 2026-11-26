@@ -197,6 +197,27 @@ async function mudarGrupo(sock, chatId, acao, estadoGrupo) {
   }
 }
 
+// ---------- jogos no privado (Cidade Dorme, Adivinha o Lugar) ----------
+// formas (ids equivalentes: @lid, @s.whatsapp.net...) de um participante do grupo que bate com `id`
+async function participanteDe(sock, chatId, id) {
+  try {
+    const meta = await sock.groupMetadata(chatId);
+    const alvo = String(id).split('@')[0].split(':')[0];
+    for (const p of meta.participants) {
+      const formas = [p.id, p.lid, p.jid, p.phoneNumber].filter(Boolean);
+      if (formas.some((f) => String(f).split('@')[0].split(':')[0] === alvo)) return formas;
+    }
+  } catch (e) { /* segue com o id que tem */ }
+  return [id];
+}
+
+// jid onde mandar a mensagem privada: prefere o número de telefone
+async function jidPrivado(sock, chatId, id) {
+  const formas = await participanteDe(sock, chatId, id);
+  const tel = formas.find((f) => String(f).endsWith('@s.whatsapp.net'));
+  return String(tel || id).replace(/:\d+@/, '@');
+}
+
 async function enviarRespostas(sock, respostas) {
   const estadoGrupo = { fechadoPorMim: false };
   const chatId = respostas[0]?.chatId;
@@ -204,12 +225,33 @@ async function enviarRespostas(sock, respostas) {
     for (const r of respostas) {
       if (r.grupo) { await mudarGrupo(sock, r.chatId, r.grupo, estadoGrupo); continue; }
       if (r.castigo) { await aplicarCastigo(sock, r.chatId, r.castigo); continue; }
+      if (r.privadoPara) {
+        // mensagem no privado de um jogador; se não conseguir, avisa no grupo
+        try {
+          const alvo = await jidPrivado(sock, r.chatId, r.privadoPara);
+          lembrarEnviado(await sock.sendMessage(alvo, { text: r.text }));
+          await new Promise((ok) => setTimeout(ok, 700)); // sem rajada de privados
+        } catch (e) {
+          console.error('Não consegui mandar no privado:', e.message);
+          if (r.falhaDM) lembrarEnviado(await sock.sendMessage(r.chatId, { text: r.falhaDM, mentions: [r.privadoPara] }));
+        }
+        continue;
+      }
       if (r.admins) {
         const adm = await listarAdmins(sock, r.chatId);
         if (adm.length) {
           r.text += `\n\n👮 ${adm.map((x) => '@' + x.split('@')[0].split(':')[0]).join(' ')}`;
           r.mentions = [...(r.mentions || []), ...adm];
         }
+      }
+      if (r.todos) {
+        // marca todo mundo do grupo sem poluir o texto (todos recebem a notificação)
+        try {
+          const meta = await sock.groupMetadata(r.chatId);
+          const meu = sock.user?.id ? jidNormalizedUser(sock.user.id).split('@')[0] : '';
+          const ids = meta.participants.map((p) => p.id).filter((id) => id.split('@')[0].split(':')[0] !== meu);
+          r.mentions = [...new Set([...(r.mentions || []), ...ids])];
+        } catch (e) { /* sem a lista, segue só com as marcações que já tem */ }
       }
       let res;
       if (r.video) {
@@ -239,6 +281,18 @@ const vendas = criarVendas({
 vendas.iniciarLembretes();
 
 const boasVindas = criarBoasVindas({ lembrarEnviado });
+// prazos dos jogos (quiz, cidade dorme, lugares): passado o tempo, o jogo avança sozinho
+bot.jogos.agendar = (ms, fn) => {
+  setTimeout(async () => {
+    try {
+      const rs = fn();
+      if (rs && rs.length && estado.conectado && sockAtual) await enviarRespostas(sockAtual, rs);
+    } catch (e) {
+      console.error('[jogos] erro no prazo:', e.message);
+    }
+  }, ms);
+};
+let jogosRearmados = false;
 const vigia = criarVigia({ bot, store, lembrarEnviado });
 const { aplicarCastigo, varrerCastigos, varrerTodos, vigiarDarAdmin } = vigia;
 const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -247,6 +301,21 @@ async function processar(sock, m) {
   if (!m.message) return;
   if (m.key.fromMe && enviados.has(m.key.id)) return;
   const chatId = m.key.remoteJid;
+  // comando de jogo no privado (/matar, /salvar, /investigar, /meupapel, /meulugar) de quem está jogando: vai pro jogo, não pro atendente
+  if (!m.key.fromMe && chatId && !chatId.endsWith('@g.us') && !chatId.endsWith('@broadcast')) {
+    try {
+      const texto = (extrair(m.message).text || '').trim();
+      const chats = texto.startsWith(PREFIX) ? bot.jogos.chatsComPrivado() : [];
+      if (chats.length) {
+        const tentativas = [];
+        for (const c of chats) tentativas.push({ chatId: c, formas: await participanteDe(sock, c, chatId) });
+        const rs = bot.privado({ tentativas, text: '/' + texto.slice(PREFIX.length) }); // o jogo sempre lê com "/"
+        if (rs) { await enviarRespostas(sock, rs); return; }
+      }
+    } catch (e) {
+      console.error('[jogos] erro no privado:', e.message);
+    }
+  }
   // conversa privada: só o atendente de vendas (se ligado com VENDAS_ATIVO=sim). Grupos não passam por aqui.
   if (vendas.ativo && vendas.ehPrivado(chatId)) {
     vendas.receber(sock, m).catch((e) => console.error('[vendas] erro:', e.message));
@@ -349,6 +418,7 @@ async function conectar() {
       estado.aviso = 'Conectado ✅';
       console.log('✅ Conectado ao WhatsApp.');
       varrerTodos(sock).catch(() => {}); // confere os castigos logo ao conectar
+      if (!jogosRearmados) { jogosRearmados = true; bot.jogos.rearmar(); } // retoma os prazos de jogos que estavam rolando
     }
 
     if (connection === 'close') {

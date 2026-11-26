@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/whatsapp.js",
-    "test": "node test/cenario.js && node test/contagem.js && node test/aleatorio.js && node test/camp_novo.js && node test/boasvindas.js && node test/puskas.js && node test/castigo.js && node test/vendas.js"
+    "test": "node test/cenario.js && node test/contagem.js && node test/aleatorio.js && node test/camp_novo.js && node test/boasvindas.js && node test/puskas.js && node test/castigo.js && node test/vendas.js && node test/jogos.js"
   },
   "engines": {
     "node": ">=20"

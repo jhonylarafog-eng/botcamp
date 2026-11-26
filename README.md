@@ -110,3 +110,11 @@ Depois disso o campeonato segue normal (`cria`, `/sala`, `/placar`, `/confirmar`
 
 ## Boas-vindas
 Quando alguém novo entra no grupo, o bot manda a foto de perfil da pessoa (se ela deixar ver; senão só o texto) com uma mensagem de boas-vindas marcando ela. Para desligar, coloque a variável `BOAS_VINDAS=nao` na Railway. O bot precisa estar no grupo (admin não é obrigatório).
+
+## Jogos 🎮
+
+- `/quiz [N]` (admin): quiz de futebol — o bot pergunta no grupo, o primeiro que escreve a resposta certa ganha 1 ponto. Banco de perguntas em `src/quiz_dados.js`.
+- `/cidadedorme` (admin): abre as inscrições (digitar *eu*), `/iniciarjogo` começa. Cada um recebe o papel no privado (assassino, detetive, médico, cidadão); de noite agem por privado (`/matar N`, `/salvar N`, `/investigar N`), de dia `/votar N`.
+- `/lugares` (admin): Adivinha o Lugar — cada um recebe um lugar secreto no privado e descreve na sua vez sem dizer o nome; quem adivinhar primeiro pontua. Lugares em `src/lugares_dados.js`.
+- Ao abrir cada jogo o bot marca todo mundo do grupo (marcação oculta) e explica as regras em poucas linhas.
+- Comuns: `/entrar`, `/sairjogo`, `/pular`, `/apurar` (admin), `/cancelarjogo` (admin). Os prazos são retomados se o bot reiniciar.
