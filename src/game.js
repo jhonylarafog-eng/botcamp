@@ -13,6 +13,7 @@ const AJUDA = `⚽ *Bot de Campeonato*
 
 *Montar campeonato*
 /iniciarcampx1 /iniciarcampx2 /iniciarcampx3 — começa o camp. O bot pergunta a *liga* e *quantos clubes entram*; responda com o número
+(admin) /campabertox1 /campabertox2 /campabertox3 — *camp aberto*: ninguém escolhe time, é só digitar *vou jogar*. Quando fechar as vagas o bot sorteia os times, os clubes e os confrontos
 (admin) coloque *aleatorio* no final (ex.: /iniciarcampx3 aleatorio) — todo mundo escolhe um time e, quando encher, o bot embaralha todo mundo e sorteia os confrontos
 Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 /listacamp — times livres e preenchidos (marca quem está em cada time)
@@ -129,7 +130,13 @@ class Bot {
     if (!camp) return;
     if (camp.status === 'liga') return this.escolherLiga(ctx, camp, text);
     if (camp.status === 'tamanho') return this.escolherTamanho(ctx, camp, text);
-    if (camp.status === 'inscricoes') return this.entrar(ctx, camp, text, false);
+    if (camp.status === 'inscricoes') {
+      if (camp.aberto) {
+        if (/^(eu)?(vou|quero)jogar(sim)?$/.test(norma(text))) return this.vouJogar(ctx, camp); // norma tira os espaços
+        return;
+      }
+      return this.entrar(ctx, camp, text, false);
+    }
     if (camp.status === 'andamento') {
       const n = norm(text);
       if (n === 'cria') return this.cria(ctx, camp);
@@ -149,6 +156,8 @@ class Bot {
     if (votarJunto) return this.puskas.votarTexto(ctx, votarJunto[1]);
     const mc = cmd.match(/^iniciarcamp(x[123])(aleatorio)?$/);
     if (mc) return this.iniciarCamp(ctx, camp, mc[1], `${mc[2] || ''} ${args}`);
+    const ma = cmd.match(/^(?:iniciar)?campaberto(x[123])$/);
+    if (ma) return this.iniciarCamp(ctx, camp, ma[1], args, true);
     switch (cmd) {
       case 'iniciarcamp': {
         const m = norm(args).match(/\b(x[123])\b/);
@@ -193,6 +202,7 @@ class Bot {
       case 'roubargrupo': // brincadeira: não muda nada no grupo, só manda a mensagem
         return say(`🏴‍☠️ O grupo foi roubado, e agora é do ${tag(msg.senderId)}!`, [msg.senderId]);
       case 'listacamp': return this.listaCamp(ctx, camp);
+      case 'voujogar': return this.vouJogar(ctx, camp);
       case 'removertime': return this.removerTime(ctx, camp);
       case 'vitoria': return this.vitoria(ctx, camp, args);
       case 'negar': return this.negar(ctx, camp);
@@ -392,7 +402,7 @@ class Bot {
   // ---------- novo fluxo: /iniciarcampx1|x2|x3 ----------
   menuLigas(camp) {
     return (
-      `⚽ *ESCOLHA A LIGA* ⚽  _(${NOME_MODO[camp.modo]})_\n` +
+      `⚽ *ESCOLHA A LIGA* ⚽  _(${NOME_MODO[camp.modo]}${camp.aberto ? ' · CAMP ABERTO' : ''})_\n` +
       `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n` +
       MENU_LIGAS.map((k, i) => `${i + 1} ▸ ${COMPETICOES[k].emoji} ${COMPETICOES[k].nome.toUpperCase()}`).join('\n') +
       `\n\n👉 Manda o número aí!`
@@ -411,16 +421,16 @@ class Bot {
   }
 
   // /iniciarcampx3 [aleatorio]
-  iniciarCamp(ctx, camp, modo, args) {
+  iniciarCamp(ctx, camp, modo, args, aberto = false) {
     const { say, msg } = ctx;
     if (!MODOS[modo]) return;
     if (camp) return say('Já tem um campeonato rolando aqui. Use /status pra ver, ou /cancelar (admin) pra encerrar.');
-    const aleatorio = norma(args).includes('aleatorio');
-    if (aleatorio && !msg.isAdmin) return say('Só admin abre o modo aleatório.');
+    const aleatorio = aberto || norma(args).includes('aleatorio');
+    if (aleatorio && !msg.isAdmin) return say(aberto ? 'Só admin abre o camp aberto.' : 'Só admin abre o modo aleatório.');
     this.registrar(ctx);
     const id = this.store.novoId('campeonato');
     const novo = {
-      id, chatId: msg.chatId, organizador: msg.senderId, status: 'liga', novo: true, aleatorio,
+      id, chatId: msg.chatId, organizador: msg.senderId, status: 'liga', novo: true, aleatorio, aberto, inscritos: [],
       competicao: null, modo, tamanho: MODOS[modo], clubes: [], rodada: 0,
       partidas: [], passaram: [], criadoEm: Date.now(),
     };
@@ -477,6 +487,7 @@ class Bot {
 
   // mensagem de abertura das inscrições (fluxo novo)
   textoCamp(camp) {
+    if (camp.aberto) return this.textoAberto(camp);
     const vagas = camp.tamanho;
     return (
       `${this.tituloCamp(camp)} ⚔️ *${NOME_MODO[camp.modo]}*${camp.aleatorio ? ' 🎲 *ALEATÓRIO*' : ''}\n` +
@@ -492,6 +503,60 @@ class Bot {
     );
   }
 
+  // ---------- camp aberto: ninguém escolhe time, só digita "vou jogar" ----------
+  vagasAberto(camp) { return camp.clubes.length * camp.tamanho; }
+
+  textoAberto(camp) {
+    const total = this.vagasAberto(camp);
+    const n = (camp.inscritos || []).length;
+    return (
+      `${this.tituloCamp(camp)} ⚔️ *${NOME_MODO[camp.modo]}* 🎟️ *CAMP ABERTO*\n` +
+      `📍 *${camp.etapaNome}* (${camp.clubes.length} clubes)\n` +
+      `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n` +
+      `👉 Quer jogar? Digita *vou jogar* que o bot já te escreve!\n` +
+      `🎲 Os times e os clubes saem *sorteados* quando fechar as vagas.\n\n` +
+      `✅ Inscritos: *${n}/${total}*` +
+      (n ? `\n${camp.inscritos.map(tag).join(' ')}` : '') +
+      `\n\n🎙️ Organização: ${tag(camp.organizador)}`
+    );
+  }
+
+  // "vou jogar" (ou /voujogar)
+  vouJogar(ctx, camp) {
+    const { say, msg } = ctx;
+    if (!camp || camp.status !== 'inscricoes' || !camp.aberto) return;
+    const id = msg.senderId;
+    this.registrar(ctx);
+    const mesmo = (a, b) => this.chaveId(a) === this.chaveId(b);
+    if (camp.inscritos.some((x) => mesmo(x, id))) return say(`${tag(id)} você já está inscrito! Entrou, não sai mais. (${camp.inscritos.length}/${this.vagasAberto(camp)})`, [id]);
+    camp.inscritos.push(id);
+    const total = this.vagasAberto(camp);
+    say(`✅ ${tag(id)} entrou no camp! *${camp.inscritos.length}/${total}*`, [id]);
+    if (camp.inscritos.length >= total) this.comecarAberto(ctx, camp);
+  }
+
+  // fecha as vagas: embaralha todo mundo e sorteia os clubes
+  comecarAberto(ctx, camp) {
+    const { say } = ctx;
+    const jogadores = camp.inscritos;
+    const k = Math.min(Math.floor(jogadores.length / camp.tamanho), camp.clubes.length);
+    if (k < 2) return say(`Precisa de pelo menos ${2 * camp.tamanho} jogadores pra sortear (tem ${jogadores.length}).`);
+    const emb = this.embaralhar(jogadores);
+    const clubes = this.embaralhar(camp.clubes).slice(0, k).map((c, i) => ({
+      nome: c.nome, apelidos: c.apelidos, cores: c.cores,
+      jogadores: emb.slice(i * camp.tamanho, (i + 1) * camp.tamanho),
+    }));
+    const reservas = emb.slice(k * camp.tamanho);
+    camp.clubes = clubes;
+    camp.numClubes = k;
+    camp.status = 'andamento';
+    let txt = `🎲 *Vagas fechadas! Sorteio feito!*\n\n` +
+      clubes.map((c) => `${c.cores || '⚽'} *${c.nome.toUpperCase()}* — ${c.jogadores.map(tag).join(' ')}`).join('\n');
+    if (reservas.length) txt += `\n\n🪑 Ficaram de fora (faltou gente pra completar): ${reservas.map(tag).join(' ')}`;
+    say(txt, [...emb]);
+    this.proximaRodada(ctx, camp, clubes.map((c) => c.nome));
+  }
+
   // linha de um time: bolinhas, nome e quem está dentro (marcado) ou (Livre)
   linhaTime(camp, c) {
     const nomes = c.jogadores.map(tag);
@@ -503,6 +568,7 @@ class Bot {
   listaCamp(ctx, camp) {
     const { say } = ctx;
     if (!camp || camp.status !== 'inscricoes') return say('Não tem inscrições abertas agora. Use /iniciarcampx1, /iniciarcampx2 ou /iniciarcampx3.');
+    if (camp.aberto) return say(this.textoAberto(camp), [...camp.inscritos, camp.organizador]);
     const cheios = camp.clubes.filter((c) => c.jogadores.length >= camp.tamanho);
     const livres = camp.clubes.filter((c) => c.jogadores.length < camp.tamanho);
     const vagas = livres.reduce((n, c) => n + camp.tamanho - c.jogadores.length, 0);
@@ -521,6 +587,12 @@ class Bot {
     const alvo = (msg.mentions || [])[0] || (msg.quoted && msg.quoted.senderId) || null;
     if (!alvo) return say('Responda a mensagem da pessoa com /removertime, ou marque ela: /removertime @fulano');
     const mesmo = (a, b) => a === b || a.split('@')[0].split(':')[0] === b.split('@')[0].split(':')[0];
+    if (camp.aberto) {
+      const i = camp.inscritos.findIndex((j) => mesmo(j, alvo));
+      if (i < 0) return say(`${tag(alvo)} não está inscrito.`, [alvo]);
+      const [saiu] = camp.inscritos.splice(i, 1);
+      return say(`🗑️ ${tag(saiu)} foi removido do camp por um admin. *${camp.inscritos.length}/${this.vagasAberto(camp)}*`, [saiu]);
+    }
     for (const c of camp.clubes) {
       const i = c.jogadores.findIndex((j) => mesmo(j, alvo));
       if (i >= 0) {
@@ -734,6 +806,7 @@ class Bot {
     const { say } = ctx;
     if (!camp || !['inscricoes', 'andamento'].includes(camp.status)) return say('Não tem campeonato com times pra embaralhar agora.');
     if (!this.ehOrg(ctx, camp)) return say('Só admin (ou quem iniciou o camp) embaralha os times.');
+    if (camp.aberto && camp.status === 'inscricoes') return say('No camp aberto os times só saem quando fechar as vagas — aí o sorteio já é aleatório.');
     const partidas = camp.status === 'andamento' ? this.partidasDaRodada(camp) : [];
     if (partidas.some((p) => p.estado !== 'aguardando_cria' || p.pedido)) {
       return say('Não dá mais pra embaralhar: já tem jogo em andamento nessa rodada.');
@@ -798,6 +871,7 @@ class Bot {
     const { say } = ctx;
     if (!camp || camp.status !== 'inscricoes') return;
     if (!this.ehOrg(ctx, camp)) return say('Só quem iniciou o campeonato (ou um admin) muda isso.');
+    if (camp.aberto) return say('No camp aberto a quantidade já foi escolhida. Cancele (/cancelar) e abra de novo se quiser mudar.');
     const n = parseInt(args, 10);
     const pool = this.poolDe(camp).length;
     if (!Number.isInteger(n) || n < 2 || n > pool) return say(`Use /times com um número de 2 a ${pool}.`);
@@ -809,6 +883,7 @@ class Bot {
   entrar(ctx, camp, texto, explicito) {
     const { say } = ctx;
     if (!camp || camp.status !== 'inscricoes') return;
+    if (camp.aberto) return explicito ? say('No camp aberto não escolhe time: digite *vou jogar*.') : undefined;
     const clube = acharClube(texto, camp.clubes);
     if (!clube) {
       if (explicito) say('Não achei esse clube. Clubes disponíveis:\n\n' + this.formatClubes(camp));
@@ -866,6 +941,7 @@ class Bot {
     const { say } = ctx;
     if (!camp || camp.status !== 'inscricoes') return;
     if (!this.ehOrg(ctx, camp)) return say('Só quem iniciou (ou um admin) pode começar antes da hora.');
+    if (camp.aberto) return this.comecarAberto(ctx, camp);
     if (camp.aleatorio) return this.comecarAleatorio(ctx, camp);
     const completos = camp.clubes.filter((c) => c.jogadores.length >= camp.tamanho);
     if (completos.length < 2) return say('Precisa de pelo menos 2 clubes completos pra começar.');

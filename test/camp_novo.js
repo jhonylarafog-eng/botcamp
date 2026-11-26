@@ -344,3 +344,71 @@ console.log('\n✅ camp_novo ok');
   }
   console.log('✅ embaralhar ok');
 }
+
+// ---------- camp aberto: "vou jogar", sorteio no final ----------
+{
+  const h = novo();
+  const { diz, store } = h;
+  const camp = () => store.data.campeonatos[store.data.ativos[CHAT]];
+  assert.match(diz(id(1), '/campabertox3'), /Só admin abre o camp aberto/);
+  let t = diz(ADMIN, '/campabertox3');
+  assert.match(t, /ESCOLHA A LIGA/);
+  assert.match(t, /CAMP ABERTO/);
+  diz(ADMIN, '3'); // premier
+  t = diz(ADMIN, '5'); // semifinal: 4 clubes × 3 = 12 vagas
+  assert.match(t, /CAMP ABERTO/);
+  assert.match(t, /vou jogar/);
+  assert.match(t, /Inscritos: \*0\/12\*/);
+  // não mostra os clubes
+  for (const c of camp().clubes) assert.ok(!t.toUpperCase().includes(c.nome.toUpperCase()), `mostrou ${c.nome}`);
+  // conversa solta não inscreve; "vou jogar" inscreve
+  assert.strictEqual(diz(id(1), 'bom dia'), '');
+  assert.strictEqual(diz(id(1), 'vou'), '');
+  assert.match(diz(id(1), 'vou jogar'), /entrou no camp! \*1\/12\*/);
+  assert.match(diz(id(1), 'Vou Jogar'), /já está inscrito/);
+  assert.match(diz(id(2), '/voujogar'), /\*2\/12\*/);
+  assert.match(diz(id(3), 'eu vou jogar'), /\*3\/12\*/);
+  // escolher time não funciona
+  assert.match(diz(id(4), '/time ' + camp().clubes[0].nome), /digite \*vou jogar\*/);
+  assert.strictEqual(camp().clubes.flatMap((c) => c.jogadores).length, 0);
+  // /listacamp mostra inscritos, sem clubes
+  t = diz(id(9), '/listacamp');
+  assert.match(t, /Inscritos: \*3\/12\*/);
+  assert.match(diz(id(1), '/sair'), /não sai mais/);
+  // admin remove
+  assert.match(diz(ADMIN, '/removertime', { mentions: [id(3)] }), /removido do camp.*2\/12/);
+  assert.match(diz(id(5), '/removertime', { mentions: [id(2)] }), /Só admin/);
+  assert.match(diz(ADMIN, '/removertime', { mentions: [id(3)] }), /não está inscrito/);
+  // enche (já tem 2 → faltam 10)
+  let n = 3;
+  while (camp().status === 'inscricoes') { t = diz(id(n++), 'vou jogar'); if (n > 40) throw new Error('loop'); }
+  assert.strictEqual(camp().status, 'andamento');
+  assert.match(t, /Vagas fechadas/);
+  assert.strictEqual(camp().clubes.length, 4);
+  const todos = camp().clubes.flatMap((c) => c.jogadores);
+  assert.strictEqual(todos.length, 12);
+  assert.strictEqual(new Set(todos).size, 12);
+  camp().clubes.forEach((c) => assert.strictEqual(c.jogadores.length, 3));
+  assert.strictEqual(camp().partidas.length, 2);
+  console.log('✅ camp aberto ok');
+}
+{
+  // /comecar antes da hora: sorteia com quem tem; sobra vira reserva
+  const h = novo();
+  const { diz, store } = h;
+  const camp = () => store.data.campeonatos[store.data.ativos[CHAT]];
+  diz(ADMIN, '/campabertox2'); diz(ADMIN, '3'); diz(ADMIN, '5'); // 4 clubes × 2 = 8
+  for (let n = 1; n <= 5; n++) diz(id(n), 'vou jogar');
+  assert.match(diz(id(1), '/comecar'), /Só quem iniciou/);
+  const t = diz(ADMIN, '/comecar');
+  assert.match(t, /Ficaram de fora/);
+  assert.strictEqual(camp().status, 'andamento');
+  assert.strictEqual(camp().clubes.length, 2);
+  // poucos jogadores
+  const g = novo();
+  g.diz(ADMIN, '/campabertox2'); g.diz(ADMIN, '3'); g.diz(ADMIN, '5');
+  g.diz(id(1), 'vou jogar'); g.diz(id(2), 'vou jogar');
+  assert.match(g.diz(ADMIN, '/comecar'), /Precisa de pelo menos 4/);
+  assert.strictEqual(g.store.data.campeonatos[g.store.data.ativos[CHAT]].status, 'inscricoes');
+  console.log('✅ camp aberto /comecar ok');
+}
