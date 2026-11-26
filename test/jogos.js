@@ -333,6 +333,41 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   h.diz(ADMIN, '/cancelarjogo');
 }
 
+// ---------- /reenviar só vale para quem está dentro de um jogo em andamento ----------
+{
+  const h = novo();
+  // sem jogo: nada é reenviado, no grupo ou no privado
+  assert.strictEqual(h.dms(h.diz(id(1), '/reenviar')).length, 0);
+  assert.strictEqual(h.priv(id(1), '/reenviar'), null);
+  // Cidade Dorme: inscrições abertas ainda não há papel
+  h.diz(ADMIN, '/cidadedorme');
+  for (let i = 1; i <= 5; i++) h.diz(id(i), 'eu');
+  assert.strictEqual(h.dms(h.diz(id(1), '/reenviar')).length, 0, 'inscrições: sem envio');
+  h.diz(ADMIN, '/iniciarjogo');
+  // jogando: quem joga recebe só o PRÓPRIO papel; quem está fora não recebe nada
+  const alvo = h.g().jogadores[2];
+  const rs = h.diz(alvo.id, '/reenviar');
+  assert.ok(h.dms(rs).length >= 1 && h.dms(rs).every((r) => r.privadoPara === alvo.id), 'só pro próprio jogador');
+  assert.strictEqual(h.dms(h.diz(id(50), '/reenviar')).length, 0, 'fora do jogo (grupo): nada');
+  assert.strictEqual(h.priv(id(50), '/reenviar'), null, 'fora do jogo (privado): nada');
+  // jogo acabou/cancelado: nada de novo
+  h.diz(ADMIN, '/cancelarjogo');
+  assert.strictEqual(h.dms(h.diz(alvo.id, '/reenviar')).length, 0, 'jogo acabou: sem envio');
+  assert.strictEqual(h.priv(alvo.id, '/reenviar'), null);
+  // jogo de lugares: cada um recebe só o seu lugar
+  h.diz(ADMIN, '/lugares');
+  for (let i = 1; i <= 3; i++) h.diz(id(i), 'eu');
+  h.diz(ADMIN, '/iniciarjogo');
+  const gl = h.g();
+  for (const j of gl.jogadores) {
+    const r = h.dms(h.priv(j.id, '/reenviar'));
+    assert.ok(r.every((x) => x.privadoPara === j.id && x.text.includes(LUGARES[gl.lugares[j.id]].nome)), 'o lugar certo, pro dono certo');
+    for (const outro of gl.jogadores.filter((x) => x !== j)) assert.ok(!r.some((x) => x.text.includes(LUGARES[gl.lugares[outro.id]].nome)), 'nunca o lugar de outro');
+  }
+  assert.strictEqual(h.priv(id(50), '/reenviar'), null);
+  h.diz(ADMIN, '/cancelarjogo');
+}
+
 // ---------- quem joga fica fora do atendente (estaJogando) ----------
 {
   const h = novo();
