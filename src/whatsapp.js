@@ -240,6 +240,7 @@ async function enviarRespostas(sock, respostas) {
         try {
           const alvo = r.destino || await jidPrivado(sock, r.chatId, r.privadoPara);
           lembrarEnviado(await sock.sendMessage(alvo, { text: r.text }));
+          console.log('[jogos] privado enviado' + (r.destino ? ' (no chat do jogador)' : ''));
           await new Promise((ok) => setTimeout(ok, 700)); // sem rajada de privados
         } catch (e) {
           console.error('Não consegui mandar no privado:', e.message);
@@ -320,6 +321,7 @@ async function processar(sock, m) {
         const tentativas = [];
         for (const c of chats) tentativas.push({ chatId: c, formas: await participanteDe(sock, c, chatId) });
         const rs = bot.privado({ tentativas, text: '/' + texto.slice(PREFIX.length) }); // o jogo sempre lê com "/"
+        console.log(`[jogos] comando no privado: ${texto.split(/\s/)[0]} → ${rs ? 'tratado (' + rs.length + ' resposta(s))' : 'ignorado (não está em jogo)'}`);
         if (rs) {
           // respostas ao próprio jogador vão para o mesmo chat em que ele escreveu
           const meus = new Set(tentativas.flatMap((t) => t.formas || []).map((f) => String(f).split('@')[0].split(':')[0]));
