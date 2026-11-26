@@ -83,6 +83,16 @@ let fila = Promise.resolve();
 // Se o bot roda no WhatsApp pessoal do dono, as mensagens que ELE digita também chegam
 // como "fromMe". Ignoramos só as que o próprio bot enviou (guardamos os ids).
 const enviados = new Set();
+// conteúdo das mensagens enviadas: o WhatsApp pede reenvio quando o aparelho do destinatário não consegue abrir
+// uma mensagem ("Aguardando mensagem..."); sem isso (getMessage) o reenvio nunca acontece
+const conteudos = new Map();
+function guardarConteudo(res) {
+  const id = res?.key?.id;
+  if (!id || !res.message) return;
+  conteudos.set(id, res.message);
+  if (conteudos.size > 2000) conteudos.delete(conteudos.keys().next().value);
+}
+
 function lembrarEnviado(res) {
   const id = res?.key?.id;
   if (!id) return;
@@ -228,7 +238,7 @@ async function enviarRespostas(sock, respostas) {
       if (r.privadoPara) {
         // mensagem no privado de um jogador; se não conseguir, avisa no grupo
         try {
-          const alvo = await jidPrivado(sock, r.chatId, r.privadoPara);
+          const alvo = r.destino || await jidPrivado(sock, r.chatId, r.privadoPara);
           lembrarEnviado(await sock.sendMessage(alvo, { text: r.text }));
           await new Promise((ok) => setTimeout(ok, 700)); // sem rajada de privados
         } catch (e) {
@@ -310,7 +320,13 @@ async function processar(sock, m) {
         const tentativas = [];
         for (const c of chats) tentativas.push({ chatId: c, formas: await participanteDe(sock, c, chatId) });
         const rs = bot.privado({ tentativas, text: '/' + texto.slice(PREFIX.length) }); // o jogo sempre lê com "/"
-        if (rs) { await enviarRespostas(sock, rs); return; }
+        if (rs) {
+          // respostas ao próprio jogador vão para o mesmo chat em que ele escreveu
+          const meus = new Set(tentativas.flatMap((t) => t.formas || []).map((f) => String(f).split('@')[0].split(':')[0]));
+          for (const r of rs) if (r.privadoPara && meus.has(String(r.privadoPara).split('@')[0].split(':')[0])) r.destino = chatId;
+          await enviarRespostas(sock, rs);
+          return;
+        }
       }
     } catch (e) {
       console.error('[jogos] erro no privado:', e.message);
@@ -382,7 +398,15 @@ async function conectar() {
     printQRInTerminal: false,
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    getMessage: async (key) => conteudos.get(key.id),
   });
+  // toda mensagem enviada (por qualquer parte do bot) fica guardada para eventual reenvio
+  const enviarOriginal = sock.sendMessage.bind(sock);
+  sock.sendMessage = async (...args) => {
+    const res = await enviarOriginal(...args);
+    guardarConteudo(res);
+    return res;
+  };
   sockAtual = sock;
   let codigoPedido = false;
 

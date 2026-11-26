@@ -147,6 +147,8 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   const cid = J.filter((p) => p.papel === 'cidadao');
   const num = (p) => J.indexOf(p) + 1;
 
+  // aceita "n7" além de "7"
+  assert.match(h.dms(h.priv(ass.id, `/matar n${num(ass) === 1 ? 2 : 1}`))[0].text, /Registrado|parceiro/);
   // quem não pode, não faz
   assert.match(h.dms(h.priv(cid[0].id, `/matar ${num(cid[1])}`))[0].text, /Você não pode/);
   assert.match(h.dms(h.priv(ass.id, `/matar ${num(ass)}`))[0].text, /parceiro/);

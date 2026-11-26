@@ -278,7 +278,7 @@ class Jogos {
     if (g.fase !== 'noite') return dm('Agora não é a noite. Espere o bot avisar no grupo.');
     if (!p.vivo) return dm('Você está morto(a) e não pode agir. 💀');
     if (p.papel !== esperado) return dm('Você não pode usar esse comando com o seu papel. Veja o seu papel com /meupapel.');
-    const n = parseInt(arg, 10);
+    const n = parseInt((String(arg).match(/\d+/) || [])[0], 10); // aceita "7", "n7", "nº 7"
     const alvo = g.jogadores[n - 1];
     if (!Number.isInteger(n) || !alvo || !alvo.vivo) return dm(`Número inválido. Use ${this.cmdNoite(esperado)} com o número de alguém vivo.\n\n${this.listaVivos(g, true)}`);
     if (cmd === 'matar' && alvo.papel === 'assassino') return dm('Esse é um parceiro seu! Escolha outro. 😅');
@@ -519,7 +519,7 @@ class Jogos {
     const alvoId = (msg.mentions || [])[0] || (msg.quoted && msg.quoted.senderId) || null;
     if (alvoId) alvo = g.jogadores.find((p) => chave(p.id) === chave(alvoId));
     else {
-      const n = parseInt(args, 10);
+      const n = parseInt((String(args).match(/\d+/) || [])[0], 10);
       if (Number.isInteger(n)) alvo = g.jogadores[n - 1];
     }
     if (!alvo) return [this.say(chatId, 'Use */votar N* (número da lista) ou */votar @fulano*.')];
