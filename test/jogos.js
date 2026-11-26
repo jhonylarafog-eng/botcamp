@@ -2,7 +2,7 @@
 const assert = require('assert');
 const { Store } = require('../src/store');
 const { Bot } = require('../src/game');
-const { PERGUNTAS } = require('../src/quiz_dados');
+const { PERGUNTAS, FACEIS, DIFICEIS } = require('../src/quiz_dados');
 const { LUGARES } = require('../src/lugares_dados');
 const { bate } = require('../src/jogos');
 
@@ -39,7 +39,8 @@ assert.ok(!bate('eu acho que talvez seja aquele jogador argentino que ganhou a c
 assert.ok(bate('praia', ['Praia']) && !bate('praiano', ['Praia'], { fuzzy: false }));
 
 // ---------- dados ----------
-assert.ok(PERGUNTAS.length >= 50 && LUGARES.length >= 50);
+assert.ok(FACEIS.length >= 50 && DIFICEIS.length >= 90 && LUGARES.length >= 50);
+assert.strictEqual(new Set(DIFICEIS.map((q) => q.p)).size, DIFICEIS.length, 'sem pergunta repetida');
 for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
 
 // ---------- 1) QUIZ ----------
@@ -62,6 +63,24 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   assert.strictEqual(h.g(), null, 'acabou');
   assert.match(h.txt(rs), /FIM DO QUIZ/);
   assert.match(h.txt(rs), /venceu/);
+}
+// quiz: níveis (padrão difícil, facil e misto)
+{
+  const h = novo();
+  h.diz(ADMIN, '/quiz 5');
+  assert.strictEqual(h.g().nivel, 'dificil');
+  assert.ok(h.g().ordem.every((i) => i >= FACEIS.length), 'padrão só tem difíceis');
+  h.diz(ADMIN, '/cancelarjogo');
+  const rs = h.diz(ADMIN, '/quiz 5 facil');
+  assert.ok(h.g().ordem.every((i) => i < FACEIS.length), 'facil só tem fáceis');
+  assert.match(rs[0].text, /fáceis/);
+  h.diz(ADMIN, '/cancelarjogo');
+  h.diz(ADMIN, '/quiz misto 8');
+  assert.strictEqual(h.g().nivel, 'misto');
+  assert.strictEqual(h.g().ordem.length, 8);
+  h.diz(ADMIN, '/cancelarjogo');
+  // todas as respostas dos difíceis são aceitas pelo próprio texto
+  for (const q of DIFICEIS) assert.ok(bate(q.r[0], q.r), q.p);
 }
 // quiz: tempo esgotado e pular
 {

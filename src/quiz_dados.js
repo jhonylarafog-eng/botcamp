@@ -2,7 +2,7 @@
 // Formato: ['pergunta', 'resposta (a que o bot mostra)', 'outras formas aceitas', ...]
 // Acentos, maiúsculas e pequenos erros de digitação não importam.
 
-const BANCO = [
+const FACEIS_BANCO = [
   // Copa do Mundo
   ['Qual país venceu a primeira Copa do Mundo, em 1930?', 'Uruguai'],
   ['Quantas Copas do Mundo o Brasil já ganhou?', '5', 'cinco'],
@@ -78,6 +78,126 @@ const BANCO = [
   ['Como se chama o gol marcado contra o próprio time?', 'Gol contra', 'contra'],
 ];
 
-const PERGUNTAS = BANCO.map(([p, ...r]) => ({ p, r }));
+// ---------- DIFÍCEIS (padrão do /quiz) ----------
+const DIFICEIS_BANCO = [
+  // Copas: artilheiros, recordes, bastidores
+  ['Quem é o maior artilheiro da história das Copas do Mundo, com 16 gols?', 'Klose', 'miroslav klose'],
+  ['Quem tem o recorde de gols em uma única Copa do Mundo, com 13 gols em 1958?', 'Just Fontaine', 'fontaine'],
+  ['Quem foi o artilheiro da Copa de 1970, com 10 gols?', 'Gerd Müller', 'gerd muller', 'muller'],
+  ['Quem foi o artilheiro da Copa de 1998?', 'Šuker', 'suker', 'davor suker'],
+  ['Quem foi o artilheiro da Copa de 2006, com 5 gols?', 'Klose', 'miroslav klose'],
+  ['Quem foi o artilheiro da Copa de 2010?', 'Thomas Müller', 'thomas muller', 'muller'],
+  ['Quem foi o artilheiro da Copa de 2014, com 6 gols?', 'James Rodríguez', 'james rodriguez', 'james'],
+  ['Quem foi o artilheiro da Copa de 2018, com 6 gols?', 'Harry Kane', 'kane'],
+  ['Quem foi o artilheiro da Copa de 1938, apelidado "Diamante Negro"?', 'Leônidas', 'leonidas', 'leonidas da silva'],
+  ['Qual jogador marcou 5 gols em um único jogo da Copa de 1994, contra Camarões?', 'Salenko', 'oleg salenko'],
+  ['Quem fez o gol mais rápido da história das Copas, com 11 segundos, em 2002?', 'Hakan Şükür', 'hakan sukur', 'sukur'],
+  ['Qual seleção a Hungria goleou por 10 a 1 na Copa de 1982?', 'El Salvador'],
+  ['Quem fez o gol da virada do Uruguai na final de 1950, o "Maracanazo"?', 'Ghiggia', 'alcides ghiggia'],
+  ['Quem era o goleiro do Brasil na final de 1950 e foi injustamente culpado pela derrota?', 'Barbosa', 'moacir barbosa'],
+  ['Qual jogador marcou 3 gols na vitória da Itália sobre o Brasil na Copa de 1982?', 'Paolo Rossi', 'rossi'],
+  ['Qual argentino fez o gol que eliminou o Brasil nas oitavas da Copa de 1990?', 'Caniggia', 'claudio caniggia'],
+  ['Qual seleção eliminou o Brasil nos pênaltis nas quartas da Copa de 1986?', 'França', 'franca'],
+  ['Qual seleção eliminou o Brasil nas quartas da Copa de 2006?', 'França', 'franca'],
+  ['Qual seleção eliminou o Brasil nas quartas da Copa de 2018?', 'Bélgica', 'belgica'],
+  ['Quem fez os dois gols de cabeça da França na final da Copa de 1998?', 'Zidane', 'zinedine zidane'],
+  ['Qual italiano perdeu o pênalti decisivo na final da Copa de 1994?', 'Roberto Baggio', 'baggio'],
+  ['Qual goleiro alemão falhou no primeiro gol de Ronaldo na final de 2002?', 'Oliver Kahn', 'kahn'],
+  ['Qual colombiano lesionou Neymar nas quartas da Copa de 2014?', 'Zúñiga', 'zuniga', 'camilo zuniga', 'juan zuniga'],
+  ['Quem foi eleito o melhor jogador da Copa de 2018?', 'Modrić', 'modric', 'luka modric'],
+  ['Quem foi eleito o melhor jogador da Copa de 2010?', 'Forlán', 'forlan', 'diego forlan'],
+  ['Quem foi eleito o melhor jogador da Copa de 2006?', 'Zidane', 'zinedine zidane'],
+  ['Quem foi o goleiro eleito melhor da Copa de 2022?', 'Emiliano Martínez', 'emiliano martinez', 'dibu martinez', 'dibu'],
+  ['Qual jogador tem mais jogos disputados em Copas do Mundo, com 26 partidas?', 'Messi', 'lionel messi'],
+  ['Qual país sediou as Copas de 1970 e 1986?', 'México', 'mexico'],
+  ['Qual país sediou a Copa de 1994?', 'Estados Unidos', 'eua', 'usa'],
+  ['Qual país sediou a Copa de 2002 junto com a Coreia do Sul?', 'Japão', 'japao'],
+  ['Em que Copa do Mundo o VAR foi usado pela primeira vez?', '2018', 'russia'],
+  ['Em que ano foi realizada a primeira Copa do Mundo no Brasil?', '1950'],
+  ['Quantas Copas do Mundo Pelé disputou?', '4', 'quatro'],
+  ['Quem foi o capitão do Brasil na Copa de 1970 e fez o quarto gol na final?', 'Carlos Alberto Torres', 'carlos alberto'],
+  ['Quem foi o técnico do Brasil na Copa de 1958?', 'Vicente Feola', 'feola'],
+  ['Quem foi o técnico do Brasil campeão em 1994?', 'Parreira', 'carlos alberto parreira'],
+  ['Quem foi campeão mundial como jogador (1958 e 1962) e como técnico (1970) pelo Brasil?', 'Zagallo', 'mario zagallo', 'lobo'],
+  ['Quem foi o técnico da Itália campeã do mundo em 2006?', 'Lippi', 'marcello lippi'],
+  ['Quem foi o técnico da Espanha campeã do mundo em 2010?', 'Del Bosque', 'vicente del bosque'],
+  ['Quem foi o técnico da Alemanha campeã do mundo em 2014?', 'Löw', 'low', 'joachim low', 'loew'],
+  ['Quem foi o técnico da Argentina campeã do mundo em 2022?', 'Scaloni', 'lionel scaloni'],
+  ['Quem era o goleiro e capitão da Itália campeã do mundo em 1982?', 'Dino Zoff', 'zoff'],
+  // Clubes brasileiros
+  ['Quem fez dois gols na vitória do Flamengo por 3 a 0 sobre o Liverpool no Mundial de 1981?', 'Nunes', 'nunes'],
+  ['Quem fez os dois gols do Grêmio na final do Mundial de 1983 contra o Hamburgo?', 'Renato Gaúcho', 'renato gaucho', 'renato'],
+  ['Quem fez o gol do Internacional na final do Mundial de 2006 contra o Barcelona?', 'Adriano Gabiroba', 'gabiroba'],
+  ['Quem fez o gol do Corinthians na final do Mundial de 2012 contra o Chelsea?', 'Guerrero', 'paolo guerrero'],
+  ['Contra qual clube o Corinthians decidiu o primeiro Mundial de Clubes da FIFA, em 2000?', 'Vasco', 'vasco da gama'],
+  ['Contra qual clube europeu o São Paulo ganhou o Mundial de 1992?', 'Barcelona'],
+  ['Contra qual clube europeu o Santos ganhou o Mundial de 1962?', 'Benfica'],
+  ['Contra qual clube o Atlético-MG ganhou a Libertadores de 2013?', 'Olimpia'],
+  ['Contra qual clube o Flamengo ganhou a Libertadores de 2019?', 'River Plate', 'river'],
+  ['Quem fez o gol do título do Palmeiras na Libertadores de 2020, contra o Santos?', 'Breno Lopes'],
+  ['Quem fez o gol do título do Palmeiras na Libertadores de 2021, na prorrogação contra o Flamengo?', 'Deyverson'],
+  ['Quem fez o gol do título do Fluminense na Libertadores de 2023, na prorrogação?', 'John Kennedy', 'kennedy'],
+  ['Contra qual clube o Botafogo ganhou a Libertadores de 2024?', 'Atlético-MG', 'atletico mg', 'atletico mineiro', 'galo'],
+  ['Qual clube foi o primeiro campeão da Libertadores, em 1960?', 'Peñarol', 'penarol'],
+  ['Qual foi o primeiro clube brasileiro campeão da Libertadores?', 'Santos'],
+  ['Qual clube ganhou a primeira Copa do Brasil de sua história em 2023?', 'São Paulo', 'sao paulo'],
+  ['Qual clube foi campeão brasileiro em 2014?', 'Cruzeiro'],
+  ['Qual clube foi campeão brasileiro em 2021?', 'Atlético-MG', 'atletico mg', 'atletico mineiro', 'galo'],
+  ['Qual clube é o maior campeão brasileiro da história?', 'Palmeiras'],
+  ['Qual era o nome do Palmeiras até 1942?', 'Palestra Itália', 'palestra italia', 'palestra'],
+  ['Qual é o maior artilheiro da história do Flamengo, com 508 gols?', 'Zico'],
+  ['Quem é o maior artilheiro da história do Corinthians?', 'Cláudio', 'claudio'],
+  ['Quem é o maior artilheiro da história do São Paulo?', 'Serginho Chulapa', 'chulapa', 'serginho'],
+  ['Quem é o maior artilheiro da história do Vasco?', 'Roberto Dinamite', 'dinamite'],
+  ['Quem é o maior artilheiro da história do Fluminense?', 'Waldo', 'waldo machado'],
+  ['Quem é o maior artilheiro da história do Atlético-MG?', 'Reinaldo'],
+  ['Quem é o maior artilheiro da história do Cruzeiro?', 'Tostão', 'tostao'],
+  ['Quem é o maior artilheiro da história do Botafogo?', 'Quarentinha'],
+  ['Qual é o nome oficial do estádio do Maracanã?', 'Mário Filho', 'mario filho', 'jornalista mario filho'],
+  // Apelidos
+  ['Qual craque do Palmeiras era chamado de "O Divino"?', 'Ademir da Guia', 'ademir'],
+  ['Qual craque era chamado de "Galinho de Quintino"?', 'Zico'],
+  ['Qual craque era chamado de "Anjo de Pernas Tortas"?', 'Garrincha', 'mane garrincha'],
+  ['Qual craque era chamado de "O Animal"?', 'Edmundo'],
+  ['Qual craque era chamado de "O Baixinho"?', 'Romário', 'romario'],
+  ['Qual craque alemão era chamado de "O Kaiser"?', 'Beckenbauer', 'franz beckenbauer'],
+  ['Qual craque era chamado de "O Imperador"?', 'Adriano'],
+  ['Qual craque italiano era chamado de "Il Divin Codino"?', 'Roberto Baggio', 'baggio'],
+  // Europa e mundo
+  ['Qual goleiro é o único da história a ganhar a Bola de Ouro?', 'Yashin', 'lev yashin', 'yachine'],
+  ['Quem ganhou a Bola de Ouro em 2007, o último brasileiro a conseguir?', 'Kaká', 'kaka'],
+  ['Quem ganhou a Bola de Ouro em 2018?', 'Modrić', 'modric', 'luka modric'],
+  ['Qual seleção surpreendeu e foi campeã da Eurocopa de 2004?', 'Grécia', 'grecia'],
+  ['Qual seleção foi campeã da Eurocopa de 1992, entrando na vaga da Iugoslávia?', 'Dinamarca'],
+  ['Qual seleção foi campeã da Eurocopa de 2020, disputada em 2021?', 'Itália', 'italia'],
+  ['Qual seleção tem mais títulos da Eurocopa?', 'Espanha'],
+  ['Quem fez o gol do título da Espanha na final da Copa de 2010?', 'Iniesta', 'andres iniesta'],
+  ['Quem é o maior artilheiro da história da Premier League, com 260 gols?', 'Alan Shearer', 'shearer'],
+  ['Quem tem o recorde de gols em uma temporada de 38 jogos da Premier League, com 36?', 'Haaland', 'erling haaland'],
+  ['Quem é o maior artilheiro da história da Bundesliga?', 'Gerd Müller', 'gerd muller', 'muller'],
+  ['Quem é o maior artilheiro da história do Campeonato Italiano?', 'Silvio Piola', 'piola'],
+  ['Quem é o maior artilheiro da história da Seleção Brasileira?', 'Neymar', 'neymar jr'],
+  ['Qual era o antigo estádio do Atlético de Madrid, usado até 2017?', 'Vicente Calderón', 'vicente calderon', 'calderon'],
+  ['Qual é o nome do estádio do Boca Juniors?', 'La Bombonera', 'bombonera'],
+  ['Qual é o nome do estádio do Benfica?', 'Estádio da Luz', 'estadio da luz', 'da luz', 'luz'],
+  ['Qual é o nome do estádio do Liverpool?', 'Anfield'],
+  ['Qual é o nome do estádio do Borussia Dortmund?', 'Signal Iduna Park', 'westfalenstadion', 'signal iduna'],
+  ['Em que país joga o clube Galatasaray?', 'Turquia'],
+  ['Em que país joga o clube Olympiacos?', 'Grécia', 'grecia'],
+  ['Qual clube inglês é conhecido como "The Gunners"?', 'Arsenal'],
+  // Regras
+  ['Qual a altura oficial do gol, em metros?', '2,44', '2.44', '2 44', '244'],
+  ['Qual a largura oficial do gol, em metros?', '7,32', '7.32', '7 32', '732'],
+];
 
-module.exports = { PERGUNTAS };
+const FACEIS = FACEIS_BANCO.map(([p, ...r]) => ({ p, r }));
+const DIFICEIS = DIFICEIS_BANCO.map(([p, ...r]) => ({ p, r }));
+// índices estáveis: primeiro as fáceis, depois as difíceis
+const PERGUNTAS = [...FACEIS, ...DIFICEIS];
+const INDICES = {
+  facil: FACEIS.map((_, i) => i),
+  dificil: DIFICEIS.map((_, i) => FACEIS.length + i),
+  misto: PERGUNTAS.map((_, i) => i),
+};
+
+module.exports = { PERGUNTAS, FACEIS, DIFICEIS, INDICES };

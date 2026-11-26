@@ -5,7 +5,7 @@
 // Prazos (timers) usam this.agendar(ms, fn), que o whatsapp.js define. O estado fica em store.data.jogos.
 
 const { norm, levenshtein } = require('./text');
-const { PERGUNTAS } = require('./quiz_dados');
+const { PERGUNTAS, INDICES } = require('./quiz_dados');
 const { LUGARES } = require('./lugares_dados');
 
 const chave = (id) => String(id).split('@')[0].split(':')[0];
@@ -144,7 +144,9 @@ class Jogos {
       case 'quiz': {
         if (!admin) return soAdmin();
         if (g) { say(this.jaTemJogo(g)); return true; }
-        push(this.iniciarQuiz(chatId, quem, parseInt(args, 10)));
+        const nivel = /facil|fácil/i.test(args) ? 'facil' : /misto/i.test(args) ? 'misto' : 'dificil';
+        const n = parseInt((String(args).match(/\d+/) || [])[0], 10);
+        push(this.iniciarQuiz(chatId, quem, n, nivel));
         return true;
       }
       case 'cidadedorme': case 'lugares': {
@@ -336,13 +338,13 @@ class Jogos {
   // =====================================================================
   // QUIZ DE FUTEBOL
   // =====================================================================
-  iniciarQuiz(chatId, dono, n) {
+  iniciarQuiz(chatId, dono, n, nivel = 'dificil') {
     const total = Math.min(30, Math.max(3, Number.isInteger(n) ? n : 10));
-    const ordem = this.embaralhar(PERGUNTAS.map((_, i) => i)).slice(0, total);
-    const g = { tipo: 'quiz', fase: 'jogando', dono, ordem, i: 0, pontos: {} };
+    const ordem = this.embaralhar(INDICES[nivel] || INDICES.dificil).slice(0, total);
+    const g = { tipo: 'quiz', fase: 'jogando', dono, nivel, ordem, i: 0, pontos: {} };
     this.todos()[chatId] = g;
     return [
-      this.sayTodos(chatId, `⚽ *QUIZ DE FUTEBOL* ⚽\n${SEP}\nPessoal, vai começar o *Quiz de Futebol*!\n• ${total} perguntas, ${TEMPO_QUIZ / 1000}s cada.\n• É só *escrever a resposta* no grupo: o primeiro que acertar ganha 1 ponto.\n• Quem tiver mais pontos no fim, vence. Bora! 🔥`),
+      this.sayTodos(chatId, `⚽ *QUIZ DE FUTEBOL* ⚽\n${SEP}\nPessoal, vai começar o *Quiz de Futebol*!\n• ${total} perguntas ${nivel === 'facil' ? 'fáceis' : nivel === 'misto' ? '(fáceis e difíceis)' : 'DIFÍCEIS'}, ${TEMPO_QUIZ / 1000}s cada.\n• É só *escrever a resposta* no grupo: o primeiro que acertar ganha 1 ponto.\n• Quem tiver mais pontos no fim, vence. Bora! 🔥`),
       ...this.perguntar(chatId, g),
     ];
   }
