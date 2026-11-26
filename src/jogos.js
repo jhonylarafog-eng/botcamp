@@ -340,7 +340,7 @@ class Jogos {
   // =====================================================================
   iniciarQuiz(chatId, dono, n, nivel = 'dificil') {
     const total = Math.min(30, Math.max(3, Number.isInteger(n) ? n : 10));
-    const ordem = this.embaralhar(INDICES[nivel] || INDICES.dificil).slice(0, total);
+    const ordem = this.sortearPerguntas(chatId, INDICES[nivel] || INDICES.dificil, total);
     const g = { tipo: 'quiz', fase: 'jogando', dono, nivel, ordem, i: 0, pontos: {} };
     this.todos()[chatId] = g;
     return [
@@ -349,8 +349,29 @@ class Jogos {
     ];
   }
 
+  // perguntas que este grupo já viu (guardadas no store, sobrevivem a reinícios)
+  vistas(chatId) {
+    const v = (this.store.data.quizVistas = this.store.data.quizVistas || {});
+    return (v[chatId] = v[chatId] || []);
+  }
+
+  // sorteia `total` perguntas do `pool` priorizando as que o grupo ainda NÃO viu;
+  // quando as novas acabam, completa com as já vistas e zera a memória desse pool
+  sortearPerguntas(chatId, pool, total) {
+    const vistas = new Set(this.vistas(chatId));
+    const novas = this.embaralhar(pool.filter((i) => !vistas.has(PERGUNTAS[i].p)));
+    if (novas.length >= total) return novas.slice(0, total);
+    const velhas = this.embaralhar(pool.filter((i) => vistas.has(PERGUNTAS[i].p)));
+    // zera a memória só das perguntas deste pool (mantém as de outros níveis)
+    const doPool = new Set(pool.map((i) => PERGUNTAS[i].p));
+    this.store.data.quizVistas[chatId] = this.vistas(chatId).filter((p) => !doPool.has(p));
+    return [...novas, ...velhas].slice(0, total);
+  }
+
   perguntar(chatId, g) {
     const q = PERGUNTAS[g.ordem[g.i]];
+    const vistas = this.vistas(chatId);
+    if (!vistas.includes(q.p)) vistas.push(q.p); // marca como já feita
     this.prazo(chatId, g, TEMPO_QUIZ);
     return [this.say(chatId, `❓ *Pergunta ${g.i + 1}/${g.ordem.length}*\n${q.p}`)];
   }

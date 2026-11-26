@@ -82,6 +82,34 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   // todas as respostas dos difíceis são aceitas pelo próprio texto
   for (const q of DIFICEIS) assert.ok(bate(q.r[0], q.r), q.p);
 }
+// quiz: não repete pergunta entre um quiz e outro; só recomeça quando acabam todas
+{
+  const h = novo();
+  const feitas = [];
+  const rodar = (n) => {
+    h.diz(ADMIN, `/quiz ${n}`);
+    const lote = h.g().ordem.map((i) => PERGUNTAS[i].p);
+    const antes = h.g().ordem.length;
+    for (let k = 0; k < antes; k++) h.bot.jogos.vencer(CHAT, h.g() && h.g().token); // tempo esgota, vai passando
+    return lote;
+  };
+  const a1 = rodar(10); const a2 = rodar(10); const a3 = rodar(10);
+  const todas = [...a1, ...a2, ...a3];
+  assert.strictEqual(new Set(todas).size, 30, 'três quizzes seguidos sem nenhuma repetida');
+  assert.strictEqual(h.g(), null);
+  // esgota o banco difícil: continua funcionando e volta a repetir só depois de acabar
+  const total = DIFICEIS.length;
+  let vistasTot = new Set(todas);
+  let guard = 0;
+  while (vistasTot.size < total && guard++ < 40) rodar(10).forEach((p) => vistasTot.add(p));
+  assert.strictEqual(vistasTot.size, total, 'passou por todas as perguntas antes de repetir');
+  const depois = rodar(10);
+  assert.strictEqual(depois.length, 10, 'depois de esgotar, recomeça normalmente');
+  assert.strictEqual(new Set(depois).size, 10, 'e continua sem repetir dentro do mesmo quiz');
+  // outro grupo tem a sua própria memória
+  const outro = h.bot.jogos.sortearPerguntas('outro@g.us', require('../src/quiz_dados').INDICES.dificil, 10);
+  assert.strictEqual(outro.length, 10);
+}
 // quiz: tempo esgotado e pular
 {
   const h = novo();
