@@ -16,7 +16,7 @@ const pino = require('pino');
 const baileys = require('@whiskeysockets/baileys');
 
 const makeWASocket = baileys.default || baileys.makeWASocket;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, jidNormalizedUser, downloadMediaMessage } = baileys;
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, jidNormalizedUser, downloadMediaMessage, makeCacheableSignalKeyStore } = baileys;
 
 const { Store } = require('./store');
 const { Bot } = require('./game');
@@ -39,6 +39,30 @@ const store = new Store(path.join(DATA_DIR, 'campeonatos.json'));
 const PROTEGIDOS = (process.env.PROTEGIDOS || '').split(/[,\s]+/).map((n) => n.replace(/\D/g, '')).filter(Boolean);
 const bot = new Bot(store, { prefix: PREFIX, dataDir: DATA_DIR, protegidos: PROTEGIDOS });
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
+
+// A biblioteca de criptografia (libsignal) despeja objetos de sessão — com chaves — nos logs a cada renovação.
+// Aqui escondemos esse despejo e deixamos só uma linha curta nos erros que importam (ex.: Bad MAC).
+{
+  const info = console.info.bind(console);
+  const erro = console.error.bind(console);
+  console.info = (...a) => {
+    if (typeof a[0] === 'string' && /^(Closing session|Opening session|Removing old closed session|Migrating session)/.test(a[0])) return;
+    info(...a);
+  };
+  console.error = (...a) => {
+    if (typeof a[0] === 'string' && /^(Session error|Decrypted message with closed session|Failed to decrypt)/.test(a[0])) return erro(String(a[0]).slice(0, 160));
+    erro(...a);
+  };
+}
+
+// contagem de pedidos de reenvio (o WhatsApp pede a mensagem de novo quando o aparelho não consegue abrir)
+const reenvios = new Map();
+const msgRetryCounterCache = {
+  get: (k) => reenvios.get(k),
+  set: (k, v) => { reenvios.set(k, v); if (reenvios.size > 2000) reenvios.delete(reenvios.keys().next().value); },
+  del: (k) => { reenvios.delete(k); },
+  flushAll: () => reenvios.clear(),
+};
 
 const estado = { conectado: false, codigo: null, codigoEm: 0, qr: null, aviso: 'Iniciando...' };
 let sockAtual = null;
@@ -228,7 +252,14 @@ async function jidPrivado(sock, chatId, id) {
   return String(tel || id).replace(/:\d+@/, '@');
 }
 
-async function enviarRespostas(sock, respostas) {
+let filaEnvio = Promise.resolve();
+function enviarRespostas(sock, respostas) {
+  const vez = filaEnvio.then(() => enviarLote(sock, respostas));
+  filaEnvio = vez.catch(() => {});
+  return vez;
+}
+
+async function enviarLote(sock, respostas) {
   const estadoGrupo = { fechadoPorMim: false };
   const chatId = respostas[0]?.chatId;
   try {
@@ -405,7 +436,8 @@ async function conectar() {
 
   const sock = makeWASocket({
     version,
-    auth: state,
+    auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
+    msgRetryCounterCache,
     logger,
     browser: Browsers.macOS('Chrome'),
     printQRInTerminal: false,
