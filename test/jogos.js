@@ -264,6 +264,32 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   h.diz(ADMIN, '/cancelarjogo');
 }
 
+// ---------- lugares extras (marcas e cômodos): caem menos, mas caem ----------
+{
+  const { PESO_RARO } = require('../src/lugares_dados');
+  const nomes = LUGARES.map((l) => l.nome);
+  assert.strictEqual(new Set(nomes).size, nomes.length, 'nomes de lugar não se repetem');
+  for (const n of ['McDonald\'s', 'Burger King', 'Cozinha', 'Banheiro', 'Privada', 'Sala de estar']) assert.ok(nomes.includes(n), n);
+  const h = novo();
+  const raros = new Set(LUGARES.map((l, i) => (l.peso < 1 ? i : -1)).filter((i) => i >= 0));
+  let sorteados = 0; let rarosSaidos = 0; const vistos = new Set();
+  for (let t = 0; t < 400; t++) {
+    const s = h.bot.jogos.sortearLugares(5);
+    assert.strictEqual(new Set(s).size, 5, 'lugares diferentes no mesmo jogo');
+    for (const i of s) { sorteados++; if (raros.has(i)) rarosSaidos++; vistos.add(i); }
+  }
+  const taxa = rarosSaidos / sorteados;
+  const esperada = (raros.size * PESO_RARO) / (raros.size * PESO_RARO + (LUGARES.length - raros.size));
+  assert.ok(taxa > 0.04 && taxa < esperada + 0.08, `taxa de extras ${taxa.toFixed(2)} (esperada ~${esperada.toFixed(2)})`);
+  assert.ok(taxa < raros.size / LUGARES.length, 'caem menos que se fossem iguais aos comuns');
+  assert.ok([...raros].every((i) => vistos.has(i)), 'todos os extras chegam a cair');
+  // acertos com grafias comuns
+  const q = (nome) => LUGARES.find((l) => l.nome === nome).aliases;
+  assert.ok(bate('é o mcdonalds', q("McDonald's")) && bate('mequi', q("McDonald's")) && bate('burguer king', q('Burger King')));
+  assert.ok(bate('privada', q('Privada')) && bate('banheiro', q('Banheiro')) && !bate('privada', q('Banheiro')));
+  assert.ok(bate('sala', q('Sala de estar')) && bate('cozinha', q('Cozinha')));
+}
+
 // ---------- quem joga fica fora do atendente (estaJogando) ----------
 {
   const h = novo();

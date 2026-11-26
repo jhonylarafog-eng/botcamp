@@ -67,9 +67,63 @@ Igreja evangélica | culto evangelico
 Padaria de esquina | botequim, boteco
 `;
 
-const LUGARES = LINHAS.trim().split('\n').map((l) => {
+// Lugares "extras": marcas famosas do Brasil e cômodos da casa. Caem com chance MENOR (PESO_RARO),
+// mas caem. Aumente o peso pra eles aparecerem mais, diminua pra aparecerem menos.
+const PESO_RARO = 0.3;
+const LINHAS_RARAS = `
+McDonald's | mcdonalds, mc donalds, mcdonald, mc, macdonalds, mac donalds, mequi
+Burger King | bk, burguer king, burger
+Subway | subway sanduiche
+Bob's | bobs
+Habib's | habibs, habibs esfiha
+Outback | outback steakhouse
+Giraffas | girafas
+Madero | restaurante madero
+Spoleto | spoleto massas
+KFC | kentucky, kentucky fried chicken
+Pizza Hut | pizzahut
+Domino's | dominos
+Starbucks | starbuck
+Cacau Show | cacauchow, loja de chocolate
+Casas Bahia | casas bahia loja
+Magazine Luiza | magalu, magazine
+Americanas | lojas americanas
+Carrefour | carrefur
+Atacadão | atacadao
+Assaí | assai, assai atacadista
+Renner | lojas renner
+Riachuelo | lojas riachuelo
+Droga Raia | raia, drogasil
+Correios | agencia dos correios, agencia do correio
+Lotérica | loterica, casa lotérica, casa loterica
+Beto Carrero World | beto carrero
+Hopi Hari | hopihari
+Cristo Redentor | cristo
+Copacabana | calcadao de copacabana
+Avenida Paulista | paulista
+Parque Ibirapuera | ibirapuera
+Cataratas do Iguaçu | cataratas, foz do iguacu
+Fernando de Noronha | noronha
+Cozinha | cozinha de casa
+Sala de estar | sala, sala de tv, sala de casa
+Banheiro | wc, toalete, lavabo
+Privada | vaso, vaso sanitario, latrina, sanitario
+Quarto | quarto de dormir, dormitorio
+Garagem | garagem de casa
+Quintal | quintal de casa
+Lavanderia | area de servico, tanque
+Varanda | sacada
+Laje | laje da casa, terraco
+Elevador | elevador do predio
+Escada rolante | escada rolante do shopping
+`;
+
+const ler = (linhas, peso) => linhas.trim().split('\n').map((l) => {
   const [nome, resto = ''] = l.split('|').map((s) => s.trim());
-  return { nome, aliases: [nome, ...resto.split(',').map((s) => s.trim()).filter(Boolean)] };
+  return { nome, peso, aliases: [nome, ...resto.split(',').map((x) => x.trim()).filter(Boolean)] };
 });
 
-module.exports = { LUGARES };
+// índices estáveis: os comuns primeiro, depois os extras (um jogo em andamento não se perde ao editar a lista)
+const LUGARES = [...ler(LINHAS, 1), ...ler(LINHAS_RARAS, PESO_RARO)];
+
+module.exports = { LUGARES, PESO_RARO };

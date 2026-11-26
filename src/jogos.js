@@ -591,7 +591,7 @@ class Jogos {
   comecarLugares(chatId, g) {
     const n = g.jogadores.length;
     if (n < 3) return [this.say(chatId, `Precisa de pelo menos 3 jogadores (tem ${n}).`)];
-    const sorteados = this.embaralhar(LUGARES.map((_, i) => i)).slice(0, n);
+    const sorteados = this.sortearLugares(n);
     g.lugares = {};
     g.jogadores.forEach((p, i) => { g.lugares[p.id] = sorteados[i]; });
     g.ordem = this.embaralhar(g.jogadores.map((p) => p.id));
@@ -612,6 +612,21 @@ class Jogos {
     }
     rs.push(...this.lugarVez(chatId, g));
     return rs;
+  }
+
+  // sorteia n lugares diferentes; cada lugar tem um peso (os "extras" têm peso menor, então caem menos)
+  sortearLugares(n) {
+    const pool = LUGARES.map((l, i) => ({ i, peso: l.peso || 1 }));
+    const saiu = [];
+    while (saiu.length < n && pool.length) {
+      const total = pool.reduce((t, x) => t + x.peso, 0);
+      let r = this.rng() * total;
+      let k = 0;
+      while (k < pool.length - 1 && r >= pool[k].peso) { r -= pool[k].peso; k++; }
+      saiu.push(pool[k].i);
+      pool.splice(k, 1);
+    }
+    return saiu;
   }
 
   lugarVez(chatId, g) {
