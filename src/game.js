@@ -27,7 +27,7 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 /quiz [N] [facil|misto] — (admin) quiz de futebol: o bot pergunta, o primeiro a acertar ganha ponto (padrão: 10 perguntas difíceis)
 /cidadedorme — (admin) abre a Cidade Dorme: *eu* pra entrar, /iniciarjogo pra começar. Papéis e ações da noite no privado (/matar N, /salvar N, /investigar N); de dia /votar N
 /lugares — (admin) Adivinha o Lugar: cada um recebe um lugar secreto no privado e descreve sem dizer o nome; quem adivinhar mais, vence
-/entrar /sairjogo — entra ou sai da lista · /pular (quiz/lugares) · /apurar (admin, fecha a votação) · /cancelarjogo (admin)
+/entrar /sairjogo — entra ou sai da lista · /reenviar — reenvia no privado o seu papel/lugar (se não chegou) · /pular (quiz/lugares) · /apurar (admin, fecha a votação) · /cancelarjogo (admin)
 
 *Zoeira*
 /lentinho — sorteia quem mais rebolou lentinho pros cria (entre os mais ativos do dia)

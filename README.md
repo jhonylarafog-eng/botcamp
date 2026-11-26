@@ -118,3 +118,4 @@ Quando alguém novo entra no grupo, o bot manda a foto de perfil da pessoa (se e
 - `/lugares` (admin): Adivinha o Lugar — cada um recebe um lugar secreto no privado e descreve na sua vez sem dizer o nome; quem adivinhar primeiro pontua. Lugares em `src/lugares_dados.js`.
 - Ao abrir cada jogo o bot marca todo mundo do grupo (marcação oculta) e explica as regras em poucas linhas.
 - Comuns: `/entrar`, `/sairjogo`, `/pular`, `/apurar` (admin), `/cancelarjogo` (admin). Os prazos são retomados se o bot reiniciar.
+- `/reenviar` (no grupo ou no privado): quem está jogando recebe de novo, no privado, o papel/lugar secreto (e a ação da noite). Serve quando a mensagem não chegou ou apareceu como "Aguardando mensagem". Há uma espera de 15 s entre pedidos.

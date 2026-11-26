@@ -189,6 +189,15 @@ class Jogos {
         say('🛑 Jogo cancelado por um admin.');
         return true;
       }
+      case 'reenviar': case 'reenvia': {
+        if (!g || g.fase === 'inscricoes' || g.tipo === 'quiz') { say('Não tem jogo com papel ou lugar secreto rolando agora.'); return true; }
+        const eu = this.ehJogador(g, quem);
+        if (!eu) { say('Você não está nesse jogo.'); return true; }
+        const rs = this.reenviar(chatId, g, eu);
+        if (!rs) { say(`${tag(quem)} calma, acabei de reenviar. Confira o privado e tente de novo em instantes.`, [quem]); return true; }
+        push([this.say(chatId, `📩 ${tag(quem)} reenviei no seu privado!`, [quem]), ...rs]);
+        return true;
+      }
       case 'votar': {
         // sem votação da Cidade Dorme, /votar é do Prêmio Puskas: deixa passar
         if (!g || g.tipo !== 'cidade' || g.fase !== 'dia') return false;
@@ -263,7 +272,7 @@ class Jogos {
     const m = String(text || '').trim().match(/^\/(\S+)\s*([\s\S]*)$/);
     if (!m) return null;
     const cmd = norm(m[1]).replace(/ /g, '');
-    if (!['meupapel', 'meulugar', 'matar', 'salvar', 'investigar'].includes(cmd)) return null;
+    if (!['meupapel', 'meulugar', 'reenviar', 'matar', 'salvar', 'investigar'].includes(cmd)) return null;
     for (const t of tentativas) {
       const g = this.get(t.chatId);
       if (!g || g.fase === 'inscricoes') continue;
@@ -279,6 +288,7 @@ class Jogos {
 
   privadoJogo(chatId, g, p, cmd, arg) {
     const dm = (t) => [this.dm(chatId, p.id, t)];
+    if (cmd === 'reenviar') return this.reenviar(chatId, g, p, true) || dm('Acabei de reenviar. Confira e tente de novo em instantes.');
     if (cmd === 'meupapel' || cmd === 'meulugar') {
       if (g.tipo === 'cidade' && cmd === 'meupapel') return dm(this.textoPapel(g, p));
       if (g.tipo === 'lugares' && cmd === 'meulugar') return dm(`🕵️ Seu lugar secreto é: *${LUGARES[g.lugares[p.id]].nome}*\nNão conte pra ninguém!`);
@@ -307,6 +317,29 @@ class Jogos {
       rs.push(...dm(`✅ Registrado: ${cmd === 'matar' ? 'atacar' : 'salvar'} *${n} ▸ ${this.nome(alvo.id)}*. (Dá pra mudar até a noite acabar.)`));
     }
     if (this.todosAgiram(g)) rs.push(...this.amanhecer(chatId, g));
+    return rs;
+  }
+
+  // reenvia no privado o papel/lugar (e o que o jogador precisa fazer agora). null = pediu há pouco (evita flood)
+  reenviar(chatId, g, p, ignorarEspera = false) {
+    const t = this.agora();
+    g.reenvio = g.reenvio || {};
+    if (!ignorarEspera && t - (g.reenvio[p.id] || 0) < 15_000) return null;
+    g.reenvio[p.id] = t;
+    const rs = [];
+    if (g.tipo === 'cidade') {
+      rs.push(this.dm(chatId, p.id, this.textoPapel(g, p)));
+      if (g.fase === 'noite' && p.vivo && p.papel !== 'cidadao') {
+        rs.push(this.dm(chatId, p.id, `🌙 *Noite ${g.rodada}* — hora de agir!\nUse *${this.cmdNoite(p.papel)}*\n\n${this.listaVivos(g, true)}`));
+      } else if (g.fase === 'dia' && p.vivo) {
+        rs.push(this.dm(chatId, p.id, `☀️ Agora é o *dia ${g.rodada}*: a votação é no grupo, com /votar N.\n\n${this.listaVivos(g, true)}`));
+      } else if (!p.vivo) {
+        rs.push(this.dm(chatId, p.id, '💀 Você está fora do jogo, mas pode continuar assistindo e comentando no grupo.'));
+      }
+    } else {
+      rs.push(this.dm(chatId, p.id, `🕵️ Seu lugar secreto é: *${LUGARES[g.lugares[p.id]].nome}*\nNão conte pra ninguém!${chave(g.ordem[g.vez]) === chave(p.id) ? '\n\n🎤 *É a sua vez agora!* Descreva sem dizer o nome.' : ''}`));
+    }
+    this.store.salvar();
     return rs;
   }
 
@@ -433,11 +466,11 @@ class Jogos {
     const rs = [this.say(chatId,
       `🌙 *CIDADE DORME — COMEÇOU!* 🌙\n${SEP}\n` +
       `Entre os ${n} jogadores: 🔪 ${assassinos} assassino${assassinos > 1 ? 's' : ''} · 🕵️ 1 detetive · 💉 1 médico · 🙂 ${n - assassinos - 2} cidadãos.\n` +
-      `📩 *Cada um recebeu o seu papel no privado.* (Se não chegou, mande /meupapel pra mim no privado.)\n\n${this.listaVivos(g, false)}`,
+      `📩 *Cada um recebeu o seu papel no privado.* (Não chegou? Mande */reenviar* aqui no grupo.)\n\n${this.listaVivos(g, false)}`,
       g.jogadores.map((p) => p.id))];
     for (const p of g.jogadores) {
       rs.push(this.dm(chatId, p.id, this.textoPapel(g, p),
-        `⚠️ ${tag(p.id)} não consegui te mandar o papel no privado. Me chame no privado, mande /meupapel e eu te respondo.`));
+        `⚠️ ${tag(p.id)} não consegui te mandar o papel no privado. Mande */reenviar* aqui no grupo que eu tento de novo.`));
     }
     rs.push(...this.noiteInicio(chatId, g));
     return rs;
@@ -458,7 +491,7 @@ class Jogos {
     } else {
       t += `Você não tem poderes. Observe, converse e vote no dia pra eliminar os assassinos!`;
     }
-    return `${t}\n\n_Pra rever o seu papel, mande /meupapel._`;
+    return `${t}\n\n_Não achou ou não abriu? Mande /reenviar no grupo._`;
   }
 
   listaVivos(g, comNome) {
@@ -472,7 +505,7 @@ class Jogos {
       if (!p.vivo || p.papel === 'cidadao') continue;
       const cmd = this.cmdNoite(p.papel);
       rs.push(this.dm(chatId, p.id, `🌙 *Noite ${g.rodada}* — hora de agir!\nUse *${cmd}*\n\n${this.listaVivos(g, true)}`,
-        `⚠️ ${tag(p.id)} não consegui te chamar no privado. Me chame no privado e mande ${cmd}.`));
+        `⚠️ ${tag(p.id)} não consegui te chamar no privado. Mande */reenviar* aqui no grupo que eu tento de novo (a ação da noite é ${cmd}).`));
     }
     this.prazo(chatId, g, TEMPO_NOITE);
     return rs;
@@ -601,14 +634,14 @@ class Jogos {
     g.inicio = this.agora();
     const rs = [this.say(chatId,
       `🕵️ *ADIVINHA O LUGAR — COMEÇOU!* 🕵️\n${SEP}\n` +
-      `📩 Cada um recebeu o seu *lugar secreto no privado* (se não chegou, mande /meulugar pra mim no privado).\n\n` +
+      `📩 Cada um recebeu o seu *lugar secreto no privado* (não chegou? mande */reenviar* aqui no grupo).\n\n` +
       `*Como funciona:* na sua vez, descreva o seu lugar (o que acontece, quem tem lá, o que se vê...) *sem dizer o nome*. ` +
       `Os outros escrevem os palpites aqui no grupo — quem acertar primeiro ganha *1 ponto*. Falou o nome do lugar? Perde a vez!\n\n` +
       `*Ordem:*\n${g.ordem.map((id, i) => `${i + 1}º ${tag(id)}`).join('\n')}`,
       g.ordem)];
     for (const p of g.jogadores) {
       rs.push(this.dm(chatId, p.id, `🕵️ Seu lugar secreto é: *${LUGARES[g.lugares[p.id]].nome}*\nNão conte pra ninguém! Quando for a sua vez, descreva sem dizer o nome.`,
-        `⚠️ ${tag(p.id)} não consegui te mandar o lugar no privado. Me chame no privado e mande /meulugar.`));
+        `⚠️ ${tag(p.id)} não consegui te mandar o lugar no privado. Mande */reenviar* aqui no grupo que eu tento de novo.`));
     }
     rs.push(...this.lugarVez(chatId, g));
     return rs;

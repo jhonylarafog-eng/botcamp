@@ -290,6 +290,49 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   assert.ok(bate('sala', q('Sala de estar')) && bate('cozinha', q('Cozinha')));
 }
 
+// ---------- /reenviar ----------
+{
+  const h = novo();
+  let agora = 5_000_000;
+  h.bot.jogos.agora = () => agora;
+  assert.match(h.txt(h.diz(id(1), '/reenviar')), /Não tem jogo/);
+  h.diz(ADMIN, '/cidadedorme');
+  for (let i = 1; i <= 5; i++) h.diz(id(i), 'eu');
+  assert.match(h.txt(h.diz(id(1), '/reenviar')), /Não tem jogo/, 'no lobby ainda não há papel');
+  h.diz(ADMIN, '/iniciarjogo');
+  assert.match(h.txt(h.diz(id(50), '/reenviar')), /não está nesse jogo/);
+  const g = h.g();
+  const p = g.jogadores.find((x) => x.papel === 'assassino');
+  agora += 60_000;
+  let rs = h.diz(p.id, '/reenviar');
+  const dms = h.dms(rs);
+  assert.ok(dms.some((r) => /Você é \*ASSASSINO\*/.test(r.text) && r.privadoPara === p.id), 'reenvia o papel no privado');
+  assert.ok(dms.some((r) => /Noite 1/.test(r.text) && /\/matar N/.test(r.text)), 'e a ação da noite');
+  assert.ok(rs.some((r) => !r.privadoPara && /reenviei no seu privado/.test(r.text)), 'avisa no grupo sem revelar o papel');
+  assert.ok(!rs.filter((r) => !r.privadoPara).some((r) => /ASSASSINO/.test(r.text)));
+  assert.match(h.txt(h.diz(p.id, '/reenviar')), /acabei de reenviar/, 'segura flood');
+  agora += 20_000;
+  assert.ok(h.dms(h.diz(p.id, '/reenviar')).length >= 1, 'depois da espera reenvia de novo');
+  // no privado também
+  assert.ok(h.dms(h.priv(p.id, '/reenviar'))[0].text.includes('ASSASSINO'));
+  h.diz(ADMIN, '/cancelarjogo');
+  // lugares
+  h.diz(ADMIN, '/lugares');
+  for (let i = 1; i <= 3; i++) h.diz(id(i), 'eu');
+  h.diz(ADMIN, '/iniciarjogo');
+  const gl = h.g();
+  agora += 60_000;
+  const q = gl.ordem[gl.vez];
+  rs = h.diz(q, '/reenviar');
+  assert.ok(h.dms(rs).some((r) => r.text.includes(LUGARES[gl.lugares[q]].nome) && /sua vez/.test(r.text)), 'reenvia o lugar e avisa que é a vez');
+  assert.ok(!rs.filter((r) => !r.privadoPara).some((r) => r.text.includes(LUGARES[gl.lugares[q]].nome)), 'o grupo não vê o lugar');
+  h.diz(ADMIN, '/cancelarjogo');
+  // quiz não tem papel
+  h.diz(ADMIN, '/quiz 3');
+  assert.match(h.txt(h.diz(id(1), '/reenviar')), /Não tem jogo/);
+  h.diz(ADMIN, '/cancelarjogo');
+}
+
 // ---------- quem joga fica fora do atendente (estaJogando) ----------
 {
   const h = novo();
