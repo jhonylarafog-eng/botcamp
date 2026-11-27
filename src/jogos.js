@@ -18,6 +18,10 @@ const TEMPO_NOITE = 90_000;
 const TEMPO_DIA = 120_000;
 const TEMPO_VEZ = 150_000;
 const MAX = { cidade: 20, lugares: 12 };
+// quais jogos estão ligados (um admin muda com /ligarjogo e /desligarjogo; a escolha fica salva)
+const PADRAO_LIGADO = { quiz: true, cidade: false, lugares: false };
+const NOME_JOGO = { quiz: 'o Quiz', cidade: 'a Cidade Dorme', lugares: 'o Adivinha o Lugar' };
+const APELIDOS_JOGO = { quiz: 'quiz', cidadedorme: 'cidade', cidade: 'cidade', lugares: 'lugares', lugar: 'lugares', adivinhaolugar: 'lugares' };
 const IDADE_MAX_JOGO = 4 * 3600_000; // jogo parado há mais que isso deixa de calar o atendente
 
 const PAPEIS = {
@@ -105,7 +109,24 @@ class Jogos {
   }
 
   // depois de reiniciar o bot: reagenda os prazos que estavam correndo
+  // jogo ligado? (a escolha salva vale; sem escolha, vale o padrão)
+  ativo(tipo) {
+    const v = (this.store.data.jogosLigados || {})[tipo];
+    return v === undefined ? !!PADRAO_LIGADO[tipo] : !!v;
+  }
+
+  definir(tipo, ligado) {
+    this.store.data.jogosLigados = { ...(this.store.data.jogosLigados || {}), [tipo]: !!ligado };
+    this.store.salvar();
+  }
+
+  statusJogos() {
+    return Object.keys(PADRAO_LIGADO).map((t) => `${this.ativo(t) ? '🟢' : '🔴'} ${NOME_JOGO[t].replace(/^(o|a) /, '')}`).join('\n');
+  }
+
   rearmar() {
+    // jogo de um tipo desligado que ficou parado de antes do desligamento: some
+    for (const [chatId, g] of Object.entries(this.todos())) if (!this.ativo(g.tipo)) this.apagar(chatId);
     for (const [chatId, g] of Object.entries(this.todos())) {
       if (!g.token || !g.fim) continue;
       const t = g.token;
@@ -152,7 +173,18 @@ class Jogos {
     const soAdmin = () => { say('Só admin faz isso.'); return true; };
 
     switch (cmd) {
+      case 'ligarjogo': case 'desligarjogo': {
+        if (!admin) return soAdmin();
+        const tipo = APELIDOS_JOGO[norm(args).replace(/ /g, '')];
+        if (!tipo) { say(`Use /${cmd} quiz, /${cmd} cidadedorme ou /${cmd} lugares.\n\n*Jogos agora:*\n${this.statusJogos()}`); return true; }
+        const ligar = cmd === 'ligarjogo';
+        this.definir(tipo, ligar);
+        if (!ligar && g && g.tipo === tipo) this.apagar(chatId); // desligou: encerra o que estava rolando aqui
+        say(`${ligar ? '🟢 Ligado' : '🔴 Desligado'}: ${NOME_JOGO[tipo].replace(/^(o|a) /, '')}.\n\n*Jogos agora:*\n${this.statusJogos()}`);
+        return true;
+      }
       case 'quiz': {
+        if (!this.ativo('quiz')) { say('🚫 O Quiz está desativado por enquanto.'); return true; }
         if (!admin) return soAdmin();
         if (g) { say(this.jaTemJogo(g)); return true; }
         const nivel = /facil|fácil/i.test(args) ? 'facil' : /misto/i.test(args) ? 'misto' : 'dificil';
@@ -161,6 +193,8 @@ class Jogos {
         return true;
       }
       case 'cidadedorme': case 'lugares': {
+        const tipo = cmd === 'lugares' ? 'lugares' : 'cidade';
+        if (!this.ativo(tipo)) { say(`🚫 ${NOME_JOGO[tipo].replace(/^o /, 'O ').replace(/^a /, 'A ')} está desativad${tipo === 'lugares' ? 'o' : 'a'} por enquanto.`); return true; }
         if (!admin) return soAdmin();
         if (g) { say(this.jaTemJogo(g)); return true; }
         push(this.abrirLobby(chatId, cmd === 'lugares' ? 'lugares' : 'cidade', quem));

@@ -17,6 +17,7 @@ function novo() {
   const bot = new Bot(store, { rng });
   const timers = [];
   bot.jogos.agendar = (ms, fn) => timers.push({ ms, fn });
+  bot.jogos.definir('cidade', true); bot.jogos.definir('lugares', true); // nos testes todos ligados (o padrão é desligado)
   const diz = (quem, texto, extra = {}) => {
     const rs = bot.handle({ chatId: CHAT, senderId: quem, senderName: quem.split('@')[0], text: texto, isAdmin: quem === ADMIN, ...extra });
     return rs;
@@ -393,6 +394,40 @@ for (const q of PERGUNTAS) assert.ok(q.p && q.r.length >= 1, q.p);
   const h = novo();
   h.diz(ADMIN, '/quiz 3');
   assert.deepStrictEqual(h.bot.jogos.chatsComPrivado(), []);
+}
+
+// ---------- liga/desliga ----------
+{
+  const store = new Store(null);
+  const bot = new Bot(store, { rng: () => 0.5 });
+  const diz = (quem, texto) => bot.handle({ chatId: CHAT, senderId: quem, senderName: 'x', text: texto, isAdmin: quem === ADMIN });
+  const txt = (rs) => rs.map((r) => r.text).join('\n');
+  // padrão: quiz ligado; cidade dorme e lugares desligados
+  assert.match(txt(diz(ADMIN, '/cidadedorme')), /desativada por enquanto/);
+  assert.match(txt(diz(id(1), '/cidadedorme')), /desativada por enquanto/, 'qualquer um vê o aviso');
+  assert.match(txt(diz(ADMIN, '/lugares')), /desativado por enquanto/);
+  assert.strictEqual(bot.jogos.get(CHAT), null, 'nada foi aberto');
+  assert.ok(diz(ADMIN, '/quiz 3').some((r) => r.todos), 'quiz continua ligado');
+  diz(ADMIN, '/cancelarjogo');
+  // só admin liga
+  assert.match(txt(diz(id(1), '/ligarjogo lugares')), /Só admin/);
+  assert.match(txt(diz(ADMIN, '/ligarjogo')), /Jogos agora/);
+  assert.match(txt(diz(ADMIN, '/ligarjogo lugares')), /Ligado: Adivinha o Lugar/);
+  assert.ok(diz(ADMIN, '/lugares').some((r) => r.todos), 'ligado: abre');
+  // desligar encerra o que estava rolando e volta a bloquear
+  assert.match(txt(diz(ADMIN, '/desligarjogo lugares')), /Desligado: Adivinha o Lugar/);
+  assert.strictEqual(bot.jogos.get(CHAT), null, 'jogo em andamento foi encerrado');
+  assert.match(txt(diz(ADMIN, '/lugares')), /desativado por enquanto/);
+  // a escolha fica salva (sobrevive a reinício) e jogos de tipo desligado que sobraram somem ao reconectar
+  bot.jogos.definir('cidade', true);
+  diz(ADMIN, '/cidadedorme');
+  bot.jogos.definir('cidade', false);
+  bot.jogos.rearmar();
+  assert.strictEqual(bot.jogos.get(CHAT), null);
+  assert.strictEqual(bot.jogos.ativo('cidade'), false);
+  const bot2 = new Bot(store, { rng: () => 0.5 });
+  assert.strictEqual(bot2.jogos.ativo('cidade'), false, 'mesmo store, mesma escolha');
+  assert.strictEqual(bot2.jogos.ativo('quiz'), true);
 }
 
 // ---------- ajuda ----------
