@@ -128,4 +128,4 @@ class Castigo {
   }
 }
 
-module.exports = { Castigo, HORAS_PADRAO };
+module.exports = { Castigo, HORAS_PADRAO, variantes, usuario };

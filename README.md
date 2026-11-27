@@ -119,3 +119,8 @@ Quando alguém novo entra no grupo, o bot manda a foto de perfil da pessoa (se e
 - Ao abrir cada jogo o bot marca todo mundo do grupo (marcação oculta) e explica as regras em poucas linhas.
 - Comuns: `/entrar`, `/sairjogo`, `/pular`, `/apurar` (admin), `/cancelarjogo` (admin). Os prazos são retomados se o bot reiniciar.
 - `/reenviar` (no grupo ou no privado): quem está jogando recebe de novo, no privado, o papel/lugar secreto (e a ação da noite). Serve quando a mensagem não chegou ou apareceu como "Aguardando mensagem". Há uma espera de 15 s entre pedidos.
+
+## Moderação
+
+- `/mutar @fulano` (admin; dá pra marcar várias pessoas ou responder a mensagem dela): tudo que a pessoa mandar no grupo é **apagado automaticamente**, mesmo que ela seja admin (o bot precisa ser admin do grupo pra apagar). Nem os comandos dela são lidos.
+- `/desmutar @fulano`: só um admin que **não** esteja mutado libera. `/mutados` lista quem está mutado. Os números protegidos (`PROTEGIDOS`) não podem ser mutados. O mute fica salvo e continua depois de reiniciar o bot.

@@ -346,6 +346,38 @@ const vigia = criarVigia({ bot, store, lembrarEnviado });
 const { aplicarCastigo, varrerCastigos, varrerTodos, vigiarDarAdmin } = vigia;
 const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
+// ---------- mute ----------
+// "não mutado" fica guardado por 5 min (e é descartado se alguém for mutado/liberado nesse meio tempo)
+const cacheMute = new Map();
+async function estaMutado(sock, chatId, senderId) {
+  if (!bot.mute.temMutados(chatId)) return false;
+  if (bot.mute.daPessoa(chatId, [senderId])) return true;
+  const k = `${chatId}|${senderId}`;
+  const c = cacheMute.get(k);
+  if (c && c.versao === bot.mute.versao && Date.now() - c.em < 5 * 60_000) return false;
+  // pode ser a mesma pessoa com outro id (número x LID): confere todas as formas dela no grupo
+  const formas = await participanteDe(sock, chatId, senderId);
+  const reg = bot.mute.daPessoa(chatId, formas);
+  if (reg) { bot.mute.aprender(chatId, reg, formas); return true; }
+  if (cacheMute.size > 2000) cacheMute.clear();
+  cacheMute.set(k, { em: Date.now(), versao: bot.mute.versao });
+  return false;
+}
+
+const avisoMuteEm = new Map();
+async function apagarDeMutado(sock, chatId, m) {
+  try {
+    await sock.sendMessage(chatId, { delete: m.key });
+  } catch (e) {
+    console.error('[mute] não consegui apagar:', e.message);
+    // avisa no grupo (no máximo a cada 10 min) — normalmente é porque o bot não é admin
+    if (Date.now() - (avisoMuteEm.get(chatId) || 0) > 10 * 60_000) {
+      avisoMuteEm.set(chatId, Date.now());
+      lembrarEnviado(await sock.sendMessage(chatId, { text: '⚠️ Não consegui apagar a mensagem de quem está mutado. Pra isso eu preciso ser *admin* do grupo.' }));
+    }
+  }
+}
+
 async function processar(sock, m) {
   if (!m.message) return;
   if (m.key.fromMe && enviados.has(m.key.id)) return;
@@ -386,6 +418,21 @@ async function processar(sock, m) {
   const senderId = m.key.participant || m.participant || (m.key.fromMe ? meuId : null);
   if (!senderId) return;
 
+  // mutado: apaga a mensagem na hora e não deixa ela chegar em mais nada (comandos, contagem, votos...)
+  if (!m.key.fromMe) {
+    try {
+      if (await estaMutado(sock, chatId, senderId)) {
+        const c = desembrulhar(m.message);
+        if (!c.reactionMessage && !c.protocolMessage) {
+          await apagarDeMutado(sock, chatId, m);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('[mute] erro:', e.message);
+    }
+  }
+
   // reação (emoji) a uma mensagem: conta como voto na votação do Puskas
   const reacao = desembrulhar(m.message).reactionMessage;
   if (reacao) {
@@ -418,9 +465,17 @@ async function processar(sock, m) {
     video = r.video || null;
     videoErro = r.erro || null;
   }
+  // /mutar e /desmutar: descobre todas as formas de id (número, LID...) das pessoas marcadas
+  let formas = null;
+  if (comando && /^\S{1}(des)?mutar(\s|$)/i.test(text.trim())) {
+    formas = {};
+    for (const id of [...(mentions || []), quoted && quoted.senderId].filter(Boolean)) {
+      formas[String(id).split('@')[0].split(':')[0]] = await participanteDe(sock, chatId, id);
+    }
+  }
   const respostas = bot.handle({
     chatId, senderId, senderName: m.pushName, text, isAdmin,
-    id: m.key.id, temImagem, mentions, quoted, video, videoErro,
+    id: m.key.id, temImagem, mentions, quoted, video, videoErro, formas,
   });
   await enviarRespostas(sock, respostas);
 }

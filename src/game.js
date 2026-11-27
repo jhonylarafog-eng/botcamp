@@ -9,6 +9,7 @@ const { Contagem } = require('./contagem');
 const { Puskas } = require('./puskas');
 const { Castigo } = require('./castigo');
 const { Jogos } = require('./jogos');
+const { Mute } = require('./mute');
 
 const AJUDA = `⚽ *Bot de Campeonato*
 
@@ -22,6 +23,10 @@ Depois é só *digitar o nome do time* pra entrar. Entrou, não sai mais
 (admin) /embaralhar — mistura os jogadores entre os times (qualquer modo, antes dos jogos começarem)
 (admin) /comecar — começa só com os times completos
 (admin) /cancelar — cancela o campeonato
+
+*Moderação*
+/mutar @fulano — (admin) tudo que a pessoa mandar no grupo é apagado automaticamente, mesmo sendo admin (dá pra marcar várias, ou responder a mensagem dela)
+/desmutar @fulano — (admin não mutado) libera · /mutados — lista quem está mutado
 
 *Jogos* 🎮
 /quiz [N] [facil|misto] — (admin) quiz de futebol: o bot pergunta, o primeiro a acertar ganha ponto (padrão: 10 perguntas difíceis)
@@ -85,6 +90,7 @@ class Bot {
     this.castigo = new Castigo(store, { agora, protegidos });
     this.contagem = new Contagem(store, { prefix });
     this.jogos = new Jogos(store, { rng, agora }); // Quiz, Cidade Dorme, Adivinha o Lugar
+    this.mute = new Mute(store, { agora, ehProtegido: (ids) => this.castigo.ehProtegido(ids) }); // /mutar: apaga tudo que a pessoa mandar
   }
 
   // comando recebido no PRIVADO de um jogador (Cidade Dorme / Adivinha o Lugar). Devolve respostas, ou null se não for com a gente.
@@ -178,6 +184,7 @@ class Bot {
     if (limparJunto) return this.puskas.limpar_vencedores(ctx, limparJunto[1] || args);
     const votarJunto = cmd.match(/^votarpuskas(\d+)$/);
     if (votarJunto) return this.puskas.votarTexto(ctx, votarJunto[1]);
+    if (this.mute.comando(ctx, cmd)) return; // /mutar, /desmutar, /mutados
     if (this.jogos.comando(ctx, cmd, args)) return; // /quiz, /cidadedorme, /lugares, /entrar, /votar...
     const mc = cmd.match(/^iniciarcamp(x[123])(aleatorio)?$/);
     if (mc) return this.iniciarCamp(ctx, camp, mc[1], `${mc[2] || ''} ${args}`);
